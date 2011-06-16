@@ -70,6 +70,11 @@ public final class DataFileUploader extends BaseDataFileTransporter
 
       // build the upload URL
       uploadUrl = "http://" + serverConfig.getServerName() + ":" + serverConfig.getServerPort() + "/users/" + getLoggingDeviceConfig().getUsername() + "/binupload?dev_nickname=" + getLoggingDeviceConfig().getDeviceNickname();
+
+      if (LOG.isDebugEnabled())
+         {
+         LOG.debug("DataFileUploader.DataFileUploader(): URL for uploading: [" + uploadUrl + "]");
+         }
       }
 
    /**
