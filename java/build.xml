@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="BodyTrackLoggerGateway" default="all">
+   <dirname property="base.directory" file="${ant.file}"/>
+   <property file="build.properties"/>
+
+   <!-- Paths -->
+   <path id="bodytrack-logging-device-classpath">
+      <!-- third-party jars -->
+      <pathelement path="${commons-io.jar}"/>
+      <pathelement path="${create-lab-commons-device.jar}"/>
+      <pathelement path="${create-lab-commons-serial.jar}"/>
+      <pathelement path="${create-lab-commons-util.jar}"/>
+      <pathelement path="${httpcomponents-client1.jar}"/>
+      <pathelement path="${httpcomponents-client2.jar}"/>
+      <pathelement path="${httpcomponents-client3.jar}"/>
+      <pathelement path="${httpcomponents-client4.jar}"/>
+      <pathelement path="${httpcomponents-client5.jar}"/>
+      <pathelement path="${httpcomponents-client6.jar}"/>
+      <pathelement path="${jackson1.jar}"/>
+      <pathelement path="${jackson2.jar}"/>
+      <pathelement path="${jetbrains-annotations.jar}"/>
+      <pathelement path="${log4j.jar}"/>
+      <pathelement path="${log4j-extras.jar}"/>
+      <pathelement path="${rxtx.jar}"/>
+   </path>
+
+   <path id="bodytrack-applications-classpath">
+      <!-- other classes within this project -->
+      <pathelement path="${bodytrack-logging-device.build.dir}"/>
+
+      <!-- third-party jars -->
+      <pathelement path="${commons-io.jar}"/>
+      <pathelement path="${create-lab-commons-device.jar}"/>
+      <pathelement path="${create-lab-commons-serial.jar}"/>
+      <pathelement path="${create-lab-commons-util.jar}"/>
+      <pathelement path="${httpcomponents-client1.jar}"/>
+      <pathelement path="${httpcomponents-client2.jar}"/>
+      <pathelement path="${httpcomponents-client3.jar}"/>
+      <pathelement path="${httpcomponents-client4.jar}"/>
+      <pathelement path="${httpcomponents-client5.jar}"/>
+      <pathelement path="${httpcomponents-client6.jar}"/>
+      <pathelement path="${jackson1.jar}"/>
+      <pathelement path="${jackson2.jar}"/>
+      <pathelement path="${jetbrains-annotations.jar}"/>
+      <pathelement path="${log4j.jar}"/>
+      <pathelement path="${log4j-extras.jar}"/>
+      <pathelement path="${rxtx.jar}"/>
+   </path>
+
+   <!-- Compiler resources -->
+   <patternset id="compiler.resources">
+      <!-- excluded files -->
+      <exclude name="**/CVS/**"/>
+      <exclude name="**/SCCS/**"/>
+      <exclude name="**/RCS/**"/>
+      <exclude name="**/rcs/**"/>
+      <exclude name="**/.DS_Store/**"/>
+      <exclude name="**/.svn/**"/>
+      <!-- included files -->
+      <include name="**/?*.properties"/>
+      <include name="**/?*.xml"/>
+      <include name="**/?*.htm"/>
+      <include name="**/?*.html"/>
+      <include name="**/?*.dtd"/>
+      <include name="**/?*.tld"/>
+      <include name="**/?*.xsd"/>
+      <include name="**/?*.xsl"/>
+      <include name="**/?*.gif"/>
+      <include name="**/?*.png"/>
+      <include name="**/?*.jpeg"/>
+      <include name="**/?*.jpg"/>
+      <include name="**/?*.dll"/>
+      <include name="**/?*.lib"/>
+      <include name="**/?*.ice"/>
+      <include name="**/?*.pem"/>
+   </patternset>
+
+   <tstamp>
+      <format property="build.timestamp" pattern="yyyy-MM-dd hh:mm:ss a z"/>
+   </tstamp>
+
+   <target name="all" depends="clean, dist" description="clean, then build everything"/>
+
+   <target name="clean" depends="clean-bodytrack-logging-device,
+                                 clean-bodytrack-applications" description="clean up everything"/>
+
+   <target name="clean-bodytrack-logging-device" description="clean up bodytrack-logging-device">
+      <delete dir="${bodytrack-logging-device.build.dir}"/>
+      <delete dir="${bodytrack-logging-device.dist.dir}"/>
+   </target>
+
+   <target name="clean-bodytrack-applications" description="clean up bodytrack-applications">
+      <delete dir="${bodytrack-applications.build.dir}"/>
+      <delete dir="${bodytrack-applications.dist.dir}"/>
+   </target>
+
+   <target name="build" depends="build-bodytrack-logging-device, build-bodytrack-applications" description="builds the source code" unless="build-is-complete">
+      <property name="build-is-complete" value="true"/>
+   </target>
+
+   <target name="build-bodytrack-logging-device" description="builds the bodytrack-logging-device source code" unless="build-bodytrack-logging-device-is-complete">
+      <compile-code-and-copy-resources src.dir="${bodytrack-logging-device.src.dir}"
+                                       build.dir="${bodytrack-logging-device.build.dir}"
+                                       classpath-ref="bodytrack-logging-device-classpath"/>
+
+      <property name="build-bodytrack-logging-device-is-complete" value="true"/>
+   </target>
+
+   <target name="build-bodytrack-applications" depends="build-bodytrack-logging-device" description="builds the bodytrack-applications source code" unless="build-bodytrack-applications-is-complete">
+      <compile-code-and-copy-resources src.dir="${bodytrack-applications.src.dir}"
+                                       build.dir="${bodytrack-applications.build.dir}"
+                                       classpath-ref="bodytrack-applications-classpath"/>
+
+      <property name="build-bodytrack-applications-is-complete" value="true"/>
+   </target>
+
+   <target name="dist" depends="dist-bodytrack-logging-device, dist-bodytrack-applications" description="builds the project" unless="dist-is-complete">
+      <property name="dist-is-complete" value="true"/>
+   </target>
+
+   <target name="dist-bodytrack-logging-device" depends="build-bodytrack-logging-device" description="builds bodytrack-logging-device" unless="dist-bodytrack-logging-device-is-complete">
+      <create-dist component.name="bodytrack-logging-device">
+         <additional-files-to-copy>
+            <fileset file="${commons-io.jar}"/>
+            <fileset file="${create-lab-commons-device.jar}"/>
+            <fileset file="${create-lab-commons-serial.jar}"/>
+            <fileset file="${create-lab-commons-util.jar}"/>
+            <fileset file="${httpcomponents-client1.jar}"/>
+            <fileset file="${httpcomponents-client2.jar}"/>
+            <fileset file="${httpcomponents-client3.jar}"/>
+            <fileset file="${httpcomponents-client4.jar}"/>
+            <fileset file="${httpcomponents-client5.jar}"/>
+            <fileset file="${httpcomponents-client6.jar}"/>
+            <fileset file="${jackson1.jar}"/>
+            <fileset file="${jackson2.jar}"/>
+            <fileset file="${rxtx.jar}"/>
+            <fileset file="${rxtx-linux.native}"/>
+            <fileset file="${rxtx-macos.native1}"/>
+            <fileset file="${rxtx-macos.native2}"/>
+            <fileset file="${rxtx-windows.native1}"/>
+            <fileset file="${rxtx-windows.native2}"/>
+         </additional-files-to-copy>
+      </create-dist>
+
+      <property name="dist-bodytrack-logging-device-is-complete" value="true"/>
+   </target>
+
+   <target name="dist-bodytrack-applications" depends="dist-bodytrack-logging-device, build-bodytrack-applications" description="builds bodytrack-applications" unless="dist-bodytrack-applications-is-complete">
+      <create-dist component.name="bodytrack-applications">
+         <additional-files-to-copy>
+            <fileset file="${bodytrack-logging-device.dist.dir}/${bodytrack-logging-device.jar.filename}"/>
+            <fileset file="${commons-io.jar}"/>
+            <fileset file="${create-lab-commons-device.jar}"/>
+            <fileset file="${create-lab-commons-serial.jar}"/>
+            <fileset file="${create-lab-commons-util.jar}"/>
+            <fileset file="${httpcomponents-client1.jar}"/>
+            <fileset file="${httpcomponents-client2.jar}"/>
+            <fileset file="${httpcomponents-client3.jar}"/>
+            <fileset file="${httpcomponents-client4.jar}"/>
+            <fileset file="${httpcomponents-client5.jar}"/>
+            <fileset file="${httpcomponents-client6.jar}"/>
+            <fileset file="${jackson1.jar}"/>
+            <fileset file="${jackson2.jar}"/>
+            <fileset file="${rxtx.jar}"/>
+            <fileset file="${rxtx-linux.native}"/>
+            <fileset file="${rxtx-macos.native1}"/>
+            <fileset file="${rxtx-macos.native2}"/>
+            <fileset file="${rxtx-windows.native1}"/>
+            <fileset file="${rxtx-windows.native2}"/>
+         </additional-files-to-copy>
+      </create-dist>
+
+      <property name="dist-bodytrack-applications-is-complete" value="true"/>
+   </target>
+
+   <!-- ============================================================================================================ -->
+   <!-- Macro definitions -->
+   <!-- ============================================================================================================ -->
+
+   <macrodef name="compile-code-and-copy-resources">
+      <attribute name="classpath-ref"/>
+      <attribute name="build.dir"/>
+      <attribute name="src.dir"/>
+      <element name="resources-filterset" optional="true"/>
+      <sequential>
+         <!-- create the build directory -->
+         <mkdir dir="@{build.dir}"/>
+
+         <!-- compile code -->
+         <javac srcdir="@{src.dir}"
+                destdir="@{build.dir}"
+                classpathref="@{classpath-ref}"
+                debug="${java.compiler.debug}"
+                nowarn="${java.compiler.generate.no.warnings}"
+                memorymaximumsize="${java.compiler.max.memory}"
+                source="${java.compiler.source.level}"
+                target="${java.compiler.target.level}"
+                fork="true"
+                includeAntRuntime="false">
+            <compilerarg line="${java.compiler.args}"/>
+         </javac>
+
+         <!-- copy resources -->
+         <copy todir="@{build.dir}">
+            <fileset dir="@{src.dir}">
+               <patternset refid="compiler.resources"/>
+            </fileset>
+            <resources-filterset/>
+         </copy>
+
+      </sequential>
+   </macrodef>
+
+   <macrodef name="create-dist">
+      <attribute name="component.name"/>
+      <element name="jar-manifest-attributes" optional="true"/>
+      <element name="additional-files-to-copy" optional="true"/>
+      <sequential>
+         <!-- create the dist directory -->
+         <mkdir dir="${@{component.name}.dist.dir}"/>
+
+         <!-- copy required jar files and native lib -->
+         <copy todir="${@{component.name}.dist.dir}" flatten="true">
+            <fileset file="${log4j.jar}"/>
+            <fileset file="${log4j-extras.jar}"/>
+            <additional-files-to-copy/>
+         </copy>
+
+         <!-- define the execution classpath for use in the scripts -->
+         <path id="@{component.name}.execution.classpath.elements">
+            <pathelement location="${@{component.name}.dist.dir}"/>
+            <fileset dir="${@{component.name}.dist.dir}">
+               <include name="**/*.jar"/>
+               <include name="**/*.dll"/>
+               <include name="**/*.so"/>
+            </fileset>
+         </path>
+
+         <!-- Set up a path id for the dist directory so it contains the correct kind of slashes when we do the pathconvert mapping -->
+         <path id="dist-@{component.name}.dir.before-conversion" path="${@{component.name}.dist.dir}"/>
+
+         <!-- Convert the dist directory path for the target platform to ensure that all the slashes are in the right direction -->
+         <pathconvert property="dist-@{component.name}.dir.after-conversion" dirsep="/" pathsep=":" refid="dist-@{component.name}.dir.before-conversion"/>
+
+         <!-- Create the classpath -->
+         <pathconvert property="@{component.name}.execution.classpath" dirsep="/" pathsep=" " refid="@{component.name}.execution.classpath.elements">
+            <map from="${dist-@{component.name}.dir.after-conversion}" to="."/>
+         </pathconvert>
+
+         <!-- create jar of Java classes -->
+         <jar destfile="${@{component.name}.dist.dir}/${@{component.name}.jar.filename}"
+              basedir="${@{component.name}.build.dir}"
+              update="no"
+              compress="true">
+            <manifest>
+               <attribute name="Built-By" value="${jar.built-by}"/>
+               <attribute name="Build-Timestamp" value="${build.timestamp}"/>
+               <attribute name="Class-Path" value="${@{component.name}.execution.classpath}"/>
+               <jar-manifest-attributes/>
+            </manifest>
+         </jar>
+
+      </sequential>
+   </macrodef>
+
+</project>

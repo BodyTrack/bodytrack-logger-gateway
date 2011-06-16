@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/java/code/applications/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/java/code/logging-device/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/java/code/applications/build" />
+      <excludeFolder url="file://$MODULE_DIR$/java/code/applications/dist" />
+      <excludeFolder url="file://$MODULE_DIR$/java/code/logging-device/build" />
+      <excludeFolder url="file://$MODULE_DIR$/java/code/logging-device/dist" />
+      <excludeFolder url="file://$MODULE_DIR$/java/logs" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module-library">
+      <library name="Commons IO">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/commons-io/commons-io-2.0.1.jar!/" />
+        </CLASSES>
+        <JAVADOC>
+          <root url="jar://$MODULE_DIR$/java/lib/commons-io/commons-io-2.0.1-javadoc.jar!/" />
+        </JAVADOC>
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/java/lib/commons-io/commons-io-2.0.1-sources.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="CREATE Lab Commons Device">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/create-lab-commons-device/create-lab-commons-device.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/java/lib/create-lab-commons-device/create-lab-commons-device-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="CREATE Lab Commons Serial">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/create-lab-commons-serial/create-lab-commons-serial.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/java/lib/create-lab-commons-serial/create-lab-commons-serial-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="CREATE Lab Commons Util">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/create-lab-commons-util/create-lab-commons-util.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/java/lib/create-lab-commons-util/create-lab-commons-util-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="HTTP Components Client">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/httpcomponents-client/commons-logging-1.1.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/java/lib/httpcomponents-client/httpclient-4.1.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/java/lib/httpcomponents-client/httpclient-cache-4.1.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/java/lib/httpcomponents-client/commons-codec-1.4.jar!/" />
+          <root url="jar://$MODULE_DIR$/java/lib/httpcomponents-client/httpmime-4.1.1.jar!/" />
+        </CLASSES>
+        <JAVADOC>
+          <root url="http://hc.apache.org/httpcomponents-client-ga/httpclient/apidocs/" />
+        </JAVADOC>
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="HTTP Components Core">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/httpcomponents-client/httpcore-4.1.jar!/" />
+        </CLASSES>
+        <JAVADOC>
+          <root url="http://hc.apache.org/httpcomponents-core-ga/httpcore/apidocs/" />
+        </JAVADOC>
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="Jackson">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/jackson/jackson-core-asl-1.8.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/java/lib/jackson/jackson-mapper-asl-1.8.1.jar!/" />
+        </CLASSES>
+        <JAVADOC>
+          <root url="http://jackson.codehaus.org/1.8.1/javadoc/" />
+        </JAVADOC>
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/java/lib/jackson/jackson-src-1.8.1.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="JetBrains Annotations">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/jetbrains-annotations/annotations.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/java/lib/jetbrains-annotations/src_annotations.zip!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="Log4j">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/log4j/log4j-1.2.16.jar!/" />
+        </CLASSES>
+        <JAVADOC>
+          <root url="http://logging.apache.org/log4j/1.2/apidocs" />
+        </JAVADOC>
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="RxTx">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/java/lib/rxtx/RXTXcomm.jar!/" />
+        </CLASSES>
+        <JAVADOC>
+          <root url="http://users.frii.com/jarvi/rxtx/doc" />
+          <root url="http://java.sun.com/products/javacomm/reference/api" />
+        </JAVADOC>
+        <SOURCES />
+      </library>
+    </orderEntry>
+  </component>
+</module>
+
