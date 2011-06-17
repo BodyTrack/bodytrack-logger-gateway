@@ -63,7 +63,7 @@ class LoggingDeviceProxy implements LoggingDevice
 
       // create the serial port configuration
       final SerialIOConfiguration config = new SerialIOConfiguration(serialPortName,
-                                                                     BaudRate.BAUD_921600,
+                                                                     BaudRate.BAUD_460800,
                                                                      CharacterSize.EIGHT,
                                                                      Parity.NONE,
                                                                      StopBits.ONE,
