@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import edu.cmu.ri.createlab.device.CreateLabDevicePingFailureEventListener;
 import edu.cmu.ri.createlab.serial.commandline.SerialDeviceCommandLineApplication;
+import org.apache.log4j.Logger;
 import org.bodytrack.loggingdevice.DataFileDownloader;
 import org.bodytrack.loggingdevice.DataFileUploader;
 import org.bodytrack.loggingdevice.LoggingDevice;
@@ -14,6 +15,8 @@ import org.bodytrack.loggingdevice.LoggingDeviceFactory;
  */
 public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplication
    {
+   private static final Logger LOG = Logger.getLogger(BodyTrackLoggingDeviceGateway.class);
+
    public static void main(final String[] args)
       {
       new BodyTrackLoggingDeviceGateway().run();
@@ -28,8 +31,12 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
          {
          public void handlePingFailureEvent()
             {
+            LOG.debug("BodyTrackLoggingDeviceGateway.handlePingFailureEvent(): ping failure detected, cleaning up...");
+
             println("Device ping failure detected.  Cleaning up...");
             disconnect(false);
+
+            LOG.debug("BodyTrackLoggingDeviceGateway.handlePingFailureEvent(): ping failure detected, attempting reconnect...");
 
             println("Now attempting to reconnect to the device...");
             startup();
@@ -90,6 +97,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
          {
          public void run()
             {
+            LOG.debug("BodyTrackLoggingDeviceGateway.run(): Quit requested by user.");
             disconnect();
             println("Bye!");
             }
