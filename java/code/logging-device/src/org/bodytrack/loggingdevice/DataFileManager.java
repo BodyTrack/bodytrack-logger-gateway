@@ -408,6 +408,9 @@ public class DataFileManager
                      {
                      // this shouldn't happen, but...
                      LOG.error("DataFileManager.uploadComplete(): File [" + file + "] already exists--this shouldn't happen!  Aborting.");
+                     // TODO: maybe a better thing to do here would be to diff the two files, make sure they're the same and, if so, then just
+                     // delete the .UPLOADING one.  Or, better yet, don't even try to upload a .BT if a corresponding and identical .BTU exists.
+                     // Not sure yet what to do if the diff fails.
                      }
                   else
                      {
