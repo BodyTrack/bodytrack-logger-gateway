@@ -2,6 +2,8 @@ package org.bodytrack.loggingdevice;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -26,6 +28,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.bodytrack.loggingdevice.commands.DisconnectCommandStrategy;
 import org.bodytrack.loggingdevice.commands.EraseFileCommandStrategy;
+import org.bodytrack.loggingdevice.commands.GetAvailableFilenamesCommandStrategy;
 import org.bodytrack.loggingdevice.commands.GetFileCommandStrategy;
 import org.bodytrack.loggingdevice.commands.HandshakeCommandStrategy;
 import org.bodytrack.loggingdevice.commands.PingCommandStrategy;
@@ -121,7 +124,7 @@ class LoggingDeviceProxy implements LoggingDevice
    private final String serialPortName;
    private final CreateLabSerialDeviceCommandStrategy disconnectCommandStrategy = new DisconnectCommandStrategy();
    private final SerialDeviceReturnValueCommandStrategy<String> pingCommandStrategy = new PingCommandStrategy();
-   private final SerialDeviceReturnValueCommandStrategy<String> getFilenameCommandStrategy = new VariableLengthStringResponseCommandStrategy('F');
+   private final SerialDeviceReturnValueCommandStrategy<String> getAvilableFilenamesCommandStrategy = new GetAvailableFilenamesCommandStrategy();
    private final CreateLabSerialDeviceCommandStrategy setCurrentTimeCommandStrategy = new SetCurrentTimeCommandStrategy();
 
    private final SerialDeviceReturnValueCommandExecutor<DataFile> dataFileReturnValueCommandExecutor;
@@ -231,9 +234,30 @@ class LoggingDeviceProxy implements LoggingDevice
 
    @Override
    @Nullable
-   public String getFilename()
+   public SortedSet<String> getAvailableFilenames()
       {
-      return stringReturnValueCommandExecutor.execute(getFilenameCommandStrategy);
+      final String commaDelimitedFilenames = stringReturnValueCommandExecutor.execute(getAvilableFilenamesCommandStrategy);
+      if (commaDelimitedFilenames != null)
+         {
+         final SortedSet<String> availableFiles = new TreeSet<String>();
+
+         final String[] filenames = commaDelimitedFilenames.split(",");
+         for (final String rawFilename : filenames)
+            {
+            if (rawFilename != null)
+               {
+               final String filename = rawFilename.trim();
+               if (filename.length() > 0)
+                  {
+                  availableFiles.add(filename);
+                  }
+               }
+            }
+
+         return availableFiles;
+         }
+
+      return null;
       }
 
    @Override

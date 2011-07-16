@@ -1,5 +1,7 @@
 package org.bodytrack.loggingdevice;
 
+import java.util.Set;
+import java.util.SortedSet;
 import edu.cmu.ri.createlab.device.CreateLabDeviceProxy;
 import org.jetbrains.annotations.Nullable;
 
@@ -9,12 +11,12 @@ import org.jetbrains.annotations.Nullable;
 public interface LoggingDevice extends CreateLabDeviceProxy
    {
    /**
-    * Retrieves a filename from the logging device.  Returns the filename as a {@link String} upon success, or
-    * returns <code>null</code> if the command failed.  If there are no data files available from the logging device,
-    * this method will return an empty {@link String}.
+    * Returns the available files as a {@link SortedSet}.  Will return an empty {@link Set} if there are no files
+    * available.  Returns <code>null</code> if the command failed.  Filenames in the {@link Set} are guaranteed to
+    * be non-<code>null</code> and have a non-zero length.
     */
    @Nullable
-   String getFilename();
+   SortedSet<String> getAvailableFilenames();
 
    /**
     * Retrieves a {@link DataFile} from the logging device specified by the given <code>filename</code>.  Returns a

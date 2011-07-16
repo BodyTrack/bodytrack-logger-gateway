@@ -6,6 +6,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
 import edu.cmu.ri.createlab.serial.CreateLabSerialDeviceVariableLengthReturnValueCommandStrategy;
 import edu.cmu.ri.createlab.serial.SerialDeviceCommandResponse;
 import org.apache.log4j.Logger;
@@ -28,6 +30,9 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
 
    /** The size of the expected response, in bytes */
    private static final int SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER = 4;
+
+   /** The size of the checksum, in bytes */
+   private static final int SIZE_IN_BYTES_OF_CHECKSUM = 4;
 
    private final byte[] command;
    private final String filename;
@@ -92,23 +97,28 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
          // get the data
          final byte[] responseData = response.getData();
 
-         // get the length of the file
-         final int length = getSizeOfVariableLengthResponse(responseData);
-         if (length == 0)
+         // get the length of the file + the 4 bytes for the CRC32 checksum
+         final int lengthOfFileAndChecksum = getSizeOfVariableLengthResponse(responseData);
+         if (lengthOfFileAndChecksum == 0)
             {
             LOG.info("GetFileCommandStrategy.convertResponse(): No data available, returning empty DataFile.");
+            return new DataFileImpl();
+            }
+         else if (lengthOfFileAndChecksum <= SIZE_IN_BYTES_OF_CHECKSUM)
+            {
+            LOG.info("GetFileCommandStrategy.convertResponse(): Missing file data and/or checksum, returning empty DataFile.");
             return new DataFileImpl();
             }
          else
             {
             if (LOG.isTraceEnabled())
                {
-               LOG.trace("GetFileCommandStrategy.convertResponse(): length is [" + length + "]");
+               LOG.trace("GetFileCommandStrategy.convertResponse(): length of file + checksum is [" + lengthOfFileAndChecksum + "]");
                }
 
             try
                {
-               final DataFileImpl dataFile = new DataFileImpl(filename, responseData, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER);
+               final DataFileImpl dataFile = new DataFileImpl(filename, responseData, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER, lengthOfFileAndChecksum);
 
                if (LOG.isDebugEnabled())
                   {
@@ -131,31 +141,36 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
       private static final byte[] EMPTY_DATA = new byte[0];
       private static final int EMPTY_OFFSET = 0;
       private static final long EMPTY_TIMESTAMP = 0;
+      private static final int EMPTY_LENGTH = 0;
 
       private final boolean isEmpty;
       private final String baseFilename;
       private final String filename;
       private final byte[] data;
       private final int offset;
+      private final int fileLength;
       private final long timestampInMillis;
+      private final boolean isChecksumCorrect;
 
       private DataFileImpl()
          {
-         this(EMPTY_FILENAME, EMPTY_DATA, EMPTY_OFFSET);
+         this(EMPTY_FILENAME, EMPTY_DATA, EMPTY_OFFSET, EMPTY_LENGTH);
          }
 
-      private DataFileImpl(@NotNull final String filename, @NotNull final byte[] data, final int offset) throws IllegalArgumentException
+      private DataFileImpl(@NotNull final String filename, @NotNull final byte[] data, final int offset, final int lengthOfFileAndChecksum) throws IllegalArgumentException
          {
          this.filename = filename;
          this.data = data;
          this.offset = offset;
-         this.isEmpty = (EMPTY_FILENAME.equals(filename) && Arrays.equals(EMPTY_DATA, data) && offset == EMPTY_OFFSET);
+         this.fileLength = (lengthOfFileAndChecksum == 0) ? 0 : lengthOfFileAndChecksum - SIZE_IN_BYTES_OF_CHECKSUM;
+         this.isEmpty = (EMPTY_FILENAME.equals(filename) && Arrays.equals(EMPTY_DATA, data) && offset == EMPTY_OFFSET && fileLength == EMPTY_LENGTH);
 
          // check whether we're trying to create an empty file
          if (this.isEmpty)
             {
             this.timestampInMillis = EMPTY_TIMESTAMP;
             this.baseFilename = filename;
+            this.isChecksumCorrect = false;
             }
          else
             {
@@ -173,6 +188,24 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
             // the filename is also the timestamp, in hex
             final long seconds = Integer.parseInt(hexTimestamp, 16);
             timestampInMillis = seconds * 1000;
+
+            // read the expected checksum
+            final long expectedChecksum = ByteBuffer.wrap(data, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER + fileLength, SIZE_IN_BYTES_OF_CHECKSUM).getInt();
+
+            // calculate the actual checksum
+            final Checksum checksum = new CRC32();
+            checksum.update(data, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER, fileLength);
+            final long actualChecksum = checksum.getValue();
+
+            // compare expected checksum to actual
+            isChecksumCorrect = (expectedChecksum == actualChecksum);
+            if (LOG.isDebugEnabled())
+               {
+               if (!isChecksumCorrect)
+                  {
+                  LOG.debug("GetFileCommandStrategy.convertResponse(): checksum verification failed: expected [" + expectedChecksum + "] actual [" + actualChecksum + "].  Returning null.");
+                  }
+               }
             }
          }
 
@@ -208,14 +241,19 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
          {
          if (outputStream != null)
             {
-            outputStream.write(data, offset, getLength());
+            outputStream.write(data, offset, fileLength);
             }
          }
 
       @Override
       public int getLength()
          {
-         return data.length - offset;
+         return fileLength;
+         }
+
+      public boolean isChecksumCorrect()
+         {
+         return isChecksumCorrect;
          }
 
       @Override
@@ -232,6 +270,14 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
 
          final DataFileImpl dataFile = (DataFileImpl)o;
 
+         if (fileLength != dataFile.fileLength)
+            {
+            return false;
+            }
+         if (isChecksumCorrect != dataFile.isChecksumCorrect)
+            {
+            return false;
+            }
          if (isEmpty != dataFile.isEmpty)
             {
             return false;
@@ -268,7 +314,9 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
          result = 31 * result + (filename != null ? filename.hashCode() : 0);
          result = 31 * result + (data != null ? Arrays.hashCode(data) : 0);
          result = 31 * result + offset;
+         result = 31 * result + fileLength;
          result = 31 * result + (int)(timestampInMillis ^ (timestampInMillis >>> 32));
+         result = 31 * result + (isChecksumCorrect ? 1 : 0);
          return result;
          }
 
@@ -285,8 +333,9 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
             {
             sb.append("{baseFilename='").append(baseFilename).append('\'');
             sb.append(", filename='").append(filename).append('\'');
-            sb.append(", length=").append(getLength());
+            sb.append(", length=").append(fileLength);
             sb.append(", timestampInMillis=").append(timestampInMillis);
+            sb.append(", checksumCorrect=").append(isChecksumCorrect);
             sb.append('}');
             }
          return sb.toString();

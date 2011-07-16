@@ -53,4 +53,7 @@ public interface DataFile
 
    /** Returns the number of bytes in the data */
    int getLength();
+
+   /** Returns whether the actual checksum equals what was expected. */
+   boolean isChecksumCorrect();
    }

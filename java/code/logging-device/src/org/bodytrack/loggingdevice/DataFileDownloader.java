@@ -1,6 +1,7 @@
 package org.bodytrack.loggingdevice;
 
 import java.io.IOException;
+import java.util.SortedSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -80,26 +81,27 @@ public final class DataFileDownloader extends BaseDataFileTransporter
 
    private final class DownloadFileCommand implements Runnable
       {
-
       @Override
       public void run()
          {
-         LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Calling LoggingDevice.getFilename()...");
+         LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Calling LoggingDevice.getAvailableFilenames()...");
 
          int delayUntilNextDownload = 5;
          TimeUnit timeUnit = TimeUnit.SECONDS;
 
-         final String filename = getDevice().getFilename();
-         if (filename == null)
+         // get the Set of available filenames from the device.  We'll iterate over each one and take appropriate action
+         final SortedSet<String> availableFilenames = getDevice().getAvailableFilenames();
+
+         if (availableFilenames == null)
             {
             // the command failed, so try again in a bit
             LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Failed to get a filename.");
             delayUntilNextDownload = 1;
             timeUnit = TimeUnit.MINUTES;
             }
-         else if ("".equals(filename))
+         else if (availableFilenames.isEmpty())
             {
-            // there's no data available, so try again in after a while
+            // no files available
             LOG.debug("DataFileDownloader$DownloadFileCommand.run(): No data available.");
             delayUntilNextDownload = 5;
             timeUnit = TimeUnit.MINUTES;
@@ -108,94 +110,103 @@ public final class DataFileDownloader extends BaseDataFileTransporter
             {
             if (LOG.isDebugEnabled())
                {
-               LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Got filename [" + filename + "]");
+               LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Device has [" + availableFilenames.size() + "] available file(s)");
                }
 
-            // there's a file available on the device, so now check whether it's one we already have
-            final DataFileManager.DataFileStatus fileStatus = getDataFileManager().getDataFileStatus(filename);
-
-            if (fileStatus == null)
+            // we got some filenames, so process them...
+            for (final String filename : availableFilenames)
                {
-               // the file doesn't already exist, so try to get it from the device
-               try
+               if (LOG.isDebugEnabled())
                   {
-                  final DataFile dataFile = getDevice().getFile(filename);
-
-                  if (dataFile == null)
-                     {
-                     // the command failed, so try again in a bit
-                     LOG.debug("DataFileDownloader$DownloadFileCommand.run(): File download failed.");
-                     delayUntilNextDownload = 1;
-                     timeUnit = TimeUnit.MINUTES;
-                     }
-                  else if (dataFile.isEmpty())
-                     {
-                     // there's no data available, so try again in after a while
-                     LOG.debug("DataFileDownloader$DownloadFileCommand.run(): No data available.");
-                     delayUntilNextDownload = 5;
-                     timeUnit = TimeUnit.MINUTES;
-                     }
-                  else
-                     {
-                     // success, so ask the DataFileManager to save the file
-                     try
-                        {
-                        getDataFileManager().save(dataFile);
-                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): File download succeeded!");
-                        }
-                     catch (IOException e)
-                        {
-                        LOG.error("DataFileDownloader$DownloadFileCommand.run(): IOException while trying to save the DataFile [" + dataFile + "]", e);
-                        }
-                     }
+                  LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Procesing file [" + filename + "]");
                   }
-               catch (NoSuchFileException ignored)
-                  {
-                  LOG.error("DataFileDownloader$DownloadFileCommand.run(): NoSuchFileException while trying to download file [" + filename + "] from the device.  Ignoring.");
-                  }
-               }
-            else
-               {
-               // the file already exists, so branch according to the file status
-               switch (fileStatus)
-                  {
-                  case DOWNLOADED:
-                     // if the file has already been downloaded, then don't do anything
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] has already been downloaded, so there's no need to download it again the device");
-                        }
-                     break;
 
-                  case UPLOADING:
-                     // if the file is currently uploading, then don't do anything
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] is currently being uploaded, so there's no need to download it from the device");
-                        }
-                     break;
+               // there's a file available on the device, so now check whether it's one we already have
+               final DataFileManager.DataFileStatus fileStatus = getDataFileManager().getDataFileStatus(filename);
 
-                  case UPLOADED:
-                     // if the file has already been uploaded, then we can safely delete the file from the device
-                     if (LOG.isDebugEnabled())
+               if (fileStatus == null)
+                  {
+                  // the file doesn't already exist, so try to get it from the device
+                  try
+                     {
+                     final DataFile dataFile = getDevice().getFile(filename);
+
+                     if (dataFile == null)
                         {
-                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file has already been uploaded--now asking device to delete file [" + filename + "]");
+                        // the command failed, so try again in a bit
+                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): File download failed.");
+                        delayUntilNextDownload = 1;
+                        timeUnit = TimeUnit.MINUTES;
                         }
-                     if (getDevice().eraseFile(filename))
+                     else if (dataFile.isEmpty())
                         {
-                        if (LOG.isDebugEnabled())
-                           {
-                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] successfully erased from device.");
-                           }
+                        // there's no data available, so try again in after a while
+                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): No data available.");
+                        delayUntilNextDownload = 5;
+                        timeUnit = TimeUnit.MINUTES;
                         }
                      else
                         {
-                        LOG.error("DataFileDownloader$DownloadFileCommand.run(): failed to erase file [" + filename + "] from device.");
+                        // success, so ask the DataFileManager to save the file
+                        try
+                           {
+                           getDataFileManager().save(dataFile);
+                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): File download succeeded!");
+                           }
+                        catch (IOException e)
+                           {
+                           LOG.error("DataFileDownloader$DownloadFileCommand.run(): IOException while trying to save the DataFile [" + dataFile + "]", e);
+                           }
                         }
-                     break;
+                     }
+                  catch (NoSuchFileException ignored)
+                     {
+                     LOG.error("DataFileDownloader$DownloadFileCommand.run(): NoSuchFileException while trying to download file [" + filename + "] from the device.  Ignoring.");
+                     }
+                  }
+               else
+                  {
+                  // the file already exists, so branch according to the file status
+                  switch (fileStatus)
+                     {
+                     case DOWNLOADED:
+                        // if the file has already been downloaded, then don't do anything
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] has already been downloaded, so there's no need to download it again the device");
+                           }
+                        break;
 
-                  default:
-                     LOG.error("DataFileDownloader$DownloadFileCommand.run(): Unexpected DataFileStatus [" + fileStatus + "].  Ignoring.");
+                     case UPLOADING:
+                        // if the file is currently uploading, then don't do anything
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] is currently being uploaded, so there's no need to download it from the device");
+                           }
+                        break;
+
+                     case UPLOADED:
+                        // if the file has already been uploaded, then we can safely delete the file from the device
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file has already been uploaded--now asking device to delete file [" + filename + "]");
+                           }
+                        if (getDevice().eraseFile(filename))
+                           {
+                           if (LOG.isDebugEnabled())
+                              {
+                              LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] successfully erased from device.");
+                              }
+                           }
+                        else
+                           {
+                           LOG.error("DataFileDownloader$DownloadFileCommand.run(): failed to erase file [" + filename + "] from device.");
+                           }
+                        break;
+
+                     default:
+                        LOG.error("DataFileDownloader$DownloadFileCommand.run(): Unexpected DataFileStatus [" + fileStatus + "].  Ignoring.");
+                     }
                   }
                }
             }

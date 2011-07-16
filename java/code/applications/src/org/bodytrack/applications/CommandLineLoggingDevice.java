@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import edu.cmu.ri.createlab.device.CreateLabDevicePingFailureEventListener;
 import edu.cmu.ri.createlab.serial.commandline.SerialDeviceCommandLineApplication;
 import org.bodytrack.loggingdevice.DataFile;
@@ -255,25 +256,31 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
             }
          };
 
-   private final Runnable getFilenameAction =
+   private final Runnable getAvailableFilesAction =
          new Runnable()
          {
          public void run()
             {
             if (isConnected())
                {
-               final String filename = device.getFilename();
-               if (filename == null)
+               final SortedSet<String> filenames = device.getAvailableFilenames();
+
+               if (filenames == null)
                   {
-                  println("Failed to get a filename.");
+                  println("Failed to get the list of available files.");
                   }
-               else if ("".equals(filename))
+               else if (filenames.isEmpty())
                   {
                   println("No files available.");
                   }
                else
                   {
-                  println("Filename: " + filename);
+                  println("Found " + filenames.size() + " available file" + (filenames.size() == 1 ? "" : "s") + ":");
+
+                  for (final String filename : filenames)
+                     {
+                     println("      " + filename);
+                     }
                   }
                }
             else
@@ -398,7 +405,7 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
                         }
                      });
 
-      registerAction("g", getFilenameAction);
+      registerAction("g", getAvailableFilesAction);
       registerAction("f", downloadFileAction);
       registerAction("e", eraseFileAction);
 
@@ -425,7 +432,7 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
       println("v         Gets the server name to which this device is configured to upload");
       println("p         Gets the server port to which this device is configured to upload");
       println("");
-      println("g         Gets a filename from the device");
+      println("g         Gets the set of available files from the device");
       println("f         Downloads a file from the device");
       println("e         Erases the specified file from the device");
       println("");
