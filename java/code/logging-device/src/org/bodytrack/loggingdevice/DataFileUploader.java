@@ -44,7 +44,7 @@ public final class DataFileUploader extends BaseDataFileTransporter
    private static final int MAX_NUM_UPLOAD_THREADS = 1;  // TODO: increase this
 
    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(MAX_NUM_UPLOAD_THREADS, new DaemonThreadFactory(DataFileUploader.class + ".executor"));
-   private final String uploadUrl;
+   private final String uploadUrlPrefix;
 
    /**
     * Constructs a <code>DataFileUploader</code> for the given {@link LoggingDevice}.
@@ -69,11 +69,11 @@ public final class DataFileUploader extends BaseDataFileTransporter
          }
 
       // build the upload URL
-      uploadUrl = "http://" + serverConfig.getServerName() + ":" + serverConfig.getServerPort() + "/users/" + getLoggingDeviceConfig().getUsername() + "/binupload?dev_nickname=" + getLoggingDeviceConfig().getDeviceNickname();
+      uploadUrlPrefix = "http://" + serverConfig.getServerName() + ":" + serverConfig.getServerPort() + "/users/" + getLoggingDeviceConfig().getUsername() + "/binupload?dev_nickname=" + getLoggingDeviceConfig().getDeviceNickname();
 
       if (LOG.isDebugEnabled())
          {
-         LOG.debug("DataFileUploader.DataFileUploader(): URL for uploading: [" + uploadUrl + "]");
+         LOG.debug("DataFileUploader.DataFileUploader(): URL prefix for uploading: [" + uploadUrlPrefix + "]");
          }
       }
 
@@ -181,16 +181,28 @@ public final class DataFileUploader extends BaseDataFileTransporter
          //
          try
             {
-            final HttpPost httppost = new HttpPost(uploadUrl);
-            final FileEntity entity = new FileEntity(fileToUpload, "application/octet-stream");
+            // get the filename, without the .uploading extension
+            final int uploadingExtensionPosition = fileToUpload.getName().indexOf(DataFileManager.DataFileStatus.UPLOADING.getFilenameExtension());
+            final String filename;
+            if (uploadingExtensionPosition > 0)
+               {
+               filename = fileToUpload.getName().substring(0, uploadingExtensionPosition);
+               }
+            else
+               {
+               filename = fileToUpload.getName();
+               }
 
-            httppost.setEntity(entity);
+            final HttpPost httpPost = new HttpPost(uploadUrlPrefix + "&filename=" + filename);
+
+            final FileEntity entity = new FileEntity(fileToUpload, "application/octet-stream");
+            httpPost.setEntity(entity);
 
             if (LOG.isDebugEnabled())
                {
-               LOG.debug("DataFileUploader$UploadFileCommand.uploadFile(): uploading file [" + fileToUpload + "]...");
+               LOG.debug("DataFileUploader$UploadFileCommand.uploadFile(): uploading file [" + fileToUpload + "] to [" + httpPost.getURI() + "]...");
                }
-            final HttpResponse response = httpClient.execute(httppost);
+            final HttpResponse response = httpClient.execute(httpPost);
             final HttpEntity responseEntity = response.getEntity();
             if (LOG.isDebugEnabled())
                {
