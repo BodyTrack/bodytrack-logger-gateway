@@ -147,6 +147,8 @@ public final class DataFileDownloader extends BaseDataFileTransporter
                         }
                      else
                         {
+                        // TODO: check the checksum
+
                         // success, so ask the DataFileManager to save the file
                         try
                            {
