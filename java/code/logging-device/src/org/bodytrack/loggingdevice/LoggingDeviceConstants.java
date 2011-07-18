@@ -14,7 +14,7 @@ public class LoggingDeviceConstants
    public static final class FilePaths
       {
       public static final File BODYTRACK_HOME_DIRECTORY = new File(System.getProperty("user.home") + File.separator + "BodyTrack" + File.separator);
-      public static final File LOGGING_DEVICE_DATA_DIRECTORY = new File(BODYTRACK_HOME_DIRECTORY, "Logging Device Data");
+      public static final File LOGGING_DEVICE_DATA_DIRECTORY = new File(BODYTRACK_HOME_DIRECTORY, "LoggingDeviceData");
 
       static
          {
