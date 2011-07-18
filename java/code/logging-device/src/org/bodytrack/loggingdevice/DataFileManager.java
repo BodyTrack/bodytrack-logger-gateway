@@ -94,14 +94,71 @@ public class DataFileManager
 
    public static final String WRITING_FILENAME_EXTENSION = ".WRITING";
 
-   private static final Map<LoggingDeviceConfig, DataFileManager> INSTANCES = new HashMap<LoggingDeviceConfig, DataFileManager>();
-   private static final Lock GET_INSTANCE_LOCK = new ReentrantLock();
+   private static final class Config
+      {
+      private final LoggingDeviceConfig loggingDeviceConfig;
+      private final DataStoreServerConfig dataStoreServerConfig;
+
+      private Config(final LoggingDeviceConfig loggingDeviceConfig, final DataStoreServerConfig dataStoreServerConfig)
+         {
+         this.loggingDeviceConfig = loggingDeviceConfig;
+         this.dataStoreServerConfig = dataStoreServerConfig;
+         }
+
+      public LoggingDeviceConfig getLoggingDeviceConfig()
+         {
+         return loggingDeviceConfig;
+         }
+
+      public DataStoreServerConfig getDataStoreServerConfig()
+         {
+         return dataStoreServerConfig;
+         }
+
+      @Override
+      public boolean equals(final Object o)
+         {
+         if (this == o)
+            {
+            return true;
+            }
+         if (o == null || getClass() != o.getClass())
+            {
+            return false;
+            }
+
+         final Config that = (Config)o;
+
+         if (dataStoreServerConfig != null ? !dataStoreServerConfig.equals(that.dataStoreServerConfig) : that.dataStoreServerConfig != null)
+            {
+            return false;
+            }
+         if (loggingDeviceConfig != null ? !loggingDeviceConfig.equals(that.loggingDeviceConfig) : that.loggingDeviceConfig != null)
+            {
+            return false;
+            }
+
+         return true;
+         }
+
+      @Override
+      public int hashCode()
+         {
+         int result = loggingDeviceConfig != null ? loggingDeviceConfig.hashCode() : 0;
+         result = 31 * result + (dataStoreServerConfig != null ? dataStoreServerConfig.hashCode() : 0);
+         return result;
+         }
+      }
+
+   private static final Map<Config, DataFileManager> INSTANCES = new HashMap<Config, DataFileManager>();
+   private static final Lock INSTANCE_LOCK = new ReentrantLock();
 
    /**
     * Returns a <code>DataFileManager</code> for the device specified by the given {@link LoggingDevice}.  Returns
     * <code>null</code> if the given {@link LoggingDevice} is <code>null</code>.
     *
     * @throws IllegalStateException if the {@link LoggingDeviceConfig} returned by the given {@link LoggingDevice} is <code>null</code>.
+    * @throws IllegalStateException if the {@link DataStoreServerConfig} returned by the given {@link LoggingDevice} is <code>null</code>.
     */
    @Nullable
    public static DataFileManager getInstance(@Nullable final LoggingDevice loggingDevice) throws IllegalStateException
@@ -115,22 +172,27 @@ public class DataFileManager
             {
             throw new IllegalStateException("Cannot create the DataFileManager because the LoggingDeviceConfig is null.");
             }
-         else
+
+         final DataStoreServerConfig dataStoreServerConfig = loggingDevice.getDataStoreServerConfig();
+         if (dataStoreServerConfig == null)
             {
-            GET_INSTANCE_LOCK.lock();  // block until condition holds
-            try
+            throw new IllegalStateException("Cannot create the DataFileManager because the DataStoreServerConfig is null.");
+            }
+
+         INSTANCE_LOCK.lock();  // block until condition holds
+         try
+            {
+            dataFileManager = INSTANCES.get(loggingDeviceConfig);
+            if (dataFileManager == null)
                {
-               dataFileManager = INSTANCES.get(loggingDeviceConfig);
-               if (dataFileManager == null)
-                  {
-                  dataFileManager = new DataFileManager(loggingDeviceConfig);
-                  INSTANCES.put(loggingDeviceConfig, dataFileManager);
-                  }
+               final Config config = new Config(loggingDeviceConfig, dataStoreServerConfig);
+               dataFileManager = new DataFileManager(config);
+               INSTANCES.put(config, dataFileManager);
                }
-            finally
-               {
-               GET_INSTANCE_LOCK.unlock();
-               }
+            }
+         finally
+            {
+            INSTANCE_LOCK.unlock();
             }
          }
 
@@ -150,9 +212,10 @@ public class DataFileManager
          };
 
    /** Creates a <code>DataFileManager</code> for the device specified by the given {@link LoggingDeviceConfig}. */
-   private DataFileManager(@NotNull final LoggingDeviceConfig loggingDeviceConfig)
+   private DataFileManager(@NotNull final Config config)
       {
-      dataFileDirectory = new File(LoggingDeviceConstants.FilePaths.LOGGING_DEVICE_DATA_DIRECTORY, "User" + loggingDeviceConfig.getUsername() + File.separator + loggingDeviceConfig.getDeviceNickname());
+      final File serverDirectory = new File(LoggingDeviceConstants.FilePaths.LOGGING_DEVICE_DATA_DIRECTORY, config.getDataStoreServerConfig().getServerName() + "_" + config.getDataStoreServerConfig().getServerPort());
+      dataFileDirectory = new File(serverDirectory, "User" + config.getLoggingDeviceConfig().getUsername() + File.separator + config.getLoggingDeviceConfig().getDeviceNickname());
 
       // make sure the directory exists
       //noinspection ResultOfMethodCallIgnored
