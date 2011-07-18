@@ -73,26 +73,7 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
                println("Scanning for a BodyTrack Logging Device...");
                device = LoggingDeviceFactory.create();
 
-               if (device == null)
-                  {
-                  println("Connection failed.");
-                  }
-               else
-                  {
-                  device.addCreateLabDevicePingFailureEventListener(pingFailureEventListener);
-                  final LoggingDeviceConfig loggingDeviceConfig = device.getLoggingDeviceConfig();
-
-                  if (loggingDeviceConfig != null)
-                     {
-                     dataFileManager = DataFileManager.getInstance(device);
-                     println("Connection successful!");
-                     }
-                  else
-                     {
-                     println("Failed to obtain the logging device config.  You will need to reconnect.!");
-                     disconnect();
-                     }
-                  }
+               dataFileManager = createDataFileManagerForDevice(device);
                }
             }
          };
@@ -126,26 +107,7 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
                         {
                         device = LoggingDeviceFactory.create(serialPortName);
 
-                        if (device == null)
-                           {
-                           println("Connection failed!");
-                           }
-                        else
-                           {
-                           device.addCreateLabDevicePingFailureEventListener(pingFailureEventListener);
-                           final LoggingDeviceConfig loggingDeviceConfig = device.getLoggingDeviceConfig();
-
-                           if (loggingDeviceConfig != null)
-                              {
-                              dataFileManager = DataFileManager.getInstance(device);
-                              println("Connection successful!");
-                              }
-                           else
-                              {
-                              println("Failed to obtain the logging device config.  You will need to reconnect.!");
-                              disconnect();
-                              }
-                           }
+                        dataFileManager = createDataFileManagerForDevice(device);
                         }
                      else
                         {
@@ -156,6 +118,48 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
                }
             }
          };
+
+   @Nullable
+   private DataFileManager createDataFileManagerForDevice(@Nullable final LoggingDevice device)
+      {
+      DataFileManager manager = null;
+
+      if (device == null)
+         {
+         println("Connection failed!");
+         }
+      else
+         {
+         device.addCreateLabDevicePingFailureEventListener(pingFailureEventListener);
+         final LoggingDeviceConfig loggingDeviceConfig = device.getLoggingDeviceConfig();
+         final DataStoreServerConfig dataStoreServerConfig = device.getDataStoreServerConfig();
+
+         if (loggingDeviceConfig == null)
+            {
+            println("Failed to obtain the logging device config.  You will need to reconnect.");
+            disconnect();
+            }
+         else if (dataStoreServerConfig == null)
+            {
+            println("Failed to obtain the data store server config.  You will need to reconnect.");
+            disconnect();
+            }
+         else
+            {
+            manager = DataFileManager.getInstance(loggingDeviceConfig, dataStoreServerConfig);
+            if (manager == null)
+               {
+               println("Failed to create the DataFileManager.  You will need to reconnect.");
+               disconnect();
+               }
+            else
+               {
+               println("Connection successful!");
+               }
+            }
+         }
+      return manager;
+      }
 
    private final Runnable disconnectFromDeviceAction =
          new Runnable()

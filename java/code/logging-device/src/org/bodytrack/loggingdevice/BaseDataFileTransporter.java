@@ -29,21 +29,27 @@ abstract class BaseDataFileTransporter
    /**
     * Constructs a <code>BaseDataFileTransporter</code> for the given {@link LoggingDevice}.
     *
-    * @throws IllegalStateException if a {@link DataFileManager} cannot be created for the given {@link LoggingDevice}
-    * or if the {@link LoggingDeviceConfig} returned by the given {@link LoggingDevice} is <code>null</code>.
+    * @throws IllegalStateException if a {@link DataFileManager} cannot be created for the given {@link LoggingDevice}.
     *
     * @see DataFileManager
     */
    protected BaseDataFileTransporter(@NotNull final LoggingDevice device) throws IllegalStateException
       {
       this.device = device;
-      this.dataFileManager = DataFileManager.getInstance(device);
 
       loggingDeviceConfig = device.getLoggingDeviceConfig();
       if (loggingDeviceConfig == null)
          {
          throw new IllegalStateException("Cannot create the DataFileManager used by the BaseDataFileTransporter because the LoggingDeviceConfig is null.");
          }
+
+      final DataStoreServerConfig dataStoreServerConfig = device.getDataStoreServerConfig();
+      if (dataStoreServerConfig == null)
+         {
+         throw new IllegalStateException("Cannot create the DataFileManager used by the BaseDataFileTransporter because the DataStoreServerConfig is null.");
+         }
+
+      this.dataFileManager = DataFileManager.getInstance(loggingDeviceConfig, dataStoreServerConfig);
       }
 
    @NotNull

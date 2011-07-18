@@ -154,31 +154,18 @@ public class DataFileManager
    private static final Lock INSTANCE_LOCK = new ReentrantLock();
 
    /**
-    * Returns a <code>DataFileManager</code> for the device specified by the given {@link LoggingDevice}.  Returns
-    * <code>null</code> if the given {@link LoggingDevice} is <code>null</code>.
-    *
-    * @throws IllegalStateException if the {@link LoggingDeviceConfig} returned by the given {@link LoggingDevice} is <code>null</code>.
-    * @throws IllegalStateException if the {@link DataStoreServerConfig} returned by the given {@link LoggingDevice} is <code>null</code>.
+    * Returns a <code>DataFileManager</code> for the device specified by the given {@link LoggingDeviceConfig} and
+    * {@link DataStoreServerConfig}.  Returns
+    * <code>null</code> if the given {@link LoggingDeviceConfig} and/or {@link DataStoreServerConfig} is <code>null</code>.
     */
    @Nullable
-   public static DataFileManager getInstance(@Nullable final LoggingDevice loggingDevice) throws IllegalStateException
+   public static DataFileManager getInstance(@Nullable final LoggingDeviceConfig loggingDeviceConfig,
+                                             @Nullable final DataStoreServerConfig dataStoreServerConfig)
       {
       DataFileManager dataFileManager = null;
 
-      if (loggingDevice != null)
+      if (loggingDeviceConfig != null && dataStoreServerConfig != null)
          {
-         final LoggingDeviceConfig loggingDeviceConfig = loggingDevice.getLoggingDeviceConfig();
-         if (loggingDeviceConfig == null)
-            {
-            throw new IllegalStateException("Cannot create the DataFileManager because the LoggingDeviceConfig is null.");
-            }
-
-         final DataStoreServerConfig dataStoreServerConfig = loggingDevice.getDataStoreServerConfig();
-         if (dataStoreServerConfig == null)
-            {
-            throw new IllegalStateException("Cannot create the DataFileManager because the DataStoreServerConfig is null.");
-            }
-
          INSTANCE_LOCK.lock();  // block until condition holds
          try
             {
