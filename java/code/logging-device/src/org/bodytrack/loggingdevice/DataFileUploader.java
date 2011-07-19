@@ -89,7 +89,7 @@ public final class DataFileUploader extends BaseDataFileTransporter
    @Override
    protected void performUponStartup()
       {
-      // schedule the update file commands, which will reschedule themselves upon completion
+      // schedule the upload file commands, which will reschedule themselves upon completion
       for (int i = 0; i < MAX_NUM_UPLOAD_THREADS; i++)
          {
          scheduleNextFileUpload(new UploadFileCommand(), i, TimeUnit.SECONDS);
