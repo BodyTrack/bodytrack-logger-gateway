@@ -6,12 +6,12 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import edu.cmu.ri.createlab.util.thread.DaemonThreadFactory;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
@@ -30,46 +30,31 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * <p>
- * <code>DataFileUploader</code> uploads {@link DataFile}s from local storage to the BodyTrack server.
- * storage.
- * </p>
- *
  * @author Chris Bartley (bartley@cmu.edu)
  */
-public final class DataFileUploader extends BaseDataFileTransporter
+public final class DataFileUploader
    {
    private static final Logger LOG = Logger.getLogger(DataFileUploader.class);
 
-   private static final int MAX_NUM_UPLOAD_THREADS = 1;  // TODO: increase this
+   private static final int MAX_NUM_UPLOAD_THREADS = 4;
 
-   private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(MAX_NUM_UPLOAD_THREADS, new DaemonThreadFactory(DataFileUploader.class + ".executor"));
+   public interface EventListener
+      {
+      void handleFileUploadedEvent(@NotNull final File uploadedFile, @Nullable final DataFileUploadResponse uploadResponse);
+      }
+
+   private final ExecutorService executor = Executors.newFixedThreadPool(MAX_NUM_UPLOAD_THREADS, new DaemonThreadFactory(DataFileUploader.class + ".executor"));
    private final String uploadUrlPrefix;
+   private final Set<EventListener> eventListeners = new HashSet<EventListener>();
 
    /**
-    * Constructs a <code>DataFileUploader</code> for the given {@link LoggingDevice}.
-    *
-    * @throws IllegalStateException if any of the following conditions holds:
-    * <ul>
-    *    <li>a {@link DataFileManager} cannot be created for the given {@link LoggingDevice}</li>
-    *    <li>the {@link LoggingDeviceConfig} returned by the given {@link LoggingDevice} is <code>null</code></li>
-    *    <li>the {@link DataStoreServerConfig} returned by the given {@link LoggingDevice} is <code>null</code></li>
-    * </ul>
-    *
-    * @see DataFileManager
+    * Constructs a <code>DataFileUploader</code> for the given {@link DataStoreServerConfig} and {@link DataStoreServerConfig}.
     */
-   public DataFileUploader(@NotNull final LoggingDevice device) throws IllegalStateException
+   public DataFileUploader(@NotNull final DataStoreServerConfig serverConfig,
+                           @NotNull final LoggingDeviceConfig loggingDeviceConfig)
       {
-      super(device);
-
-      final DataStoreServerConfig serverConfig = device.getDataStoreServerConfig();
-      if (serverConfig == null)
-         {
-         throw new IllegalStateException("Cannot create the DataFileUploader because the DataStoreServerConfig is null.");
-         }
-
-      // build the upload URL
-      uploadUrlPrefix = "http://" + serverConfig.getServerName() + ":" + serverConfig.getServerPort() + "/users/" + getLoggingDeviceConfig().getUsername() + "/binupload?dev_nickname=" + getLoggingDeviceConfig().getDeviceNickname();
+      // build the upload URL prefix
+      uploadUrlPrefix = "http://" + serverConfig.getServerName() + ":" + serverConfig.getServerPort() + "/users/" + loggingDeviceConfig.getUsername() + "/binupload?dev_nickname=" + loggingDeviceConfig.getDeviceNickname();
 
       if (LOG.isDebugEnabled())
          {
@@ -77,141 +62,70 @@ public final class DataFileUploader extends BaseDataFileTransporter
          }
       }
 
-   /**
-    * Starts the <code>DataFileUploader</code>, causing it to start uploading {@link DataFile}s.
-    */
-   public void startup()
+   public void addEventListener(@Nullable final EventListener listener)
       {
-      LOG.debug("DataFileUploader.startup()");
-      super.startup();
-      }
-
-   @Override
-   protected void performUponStartup()
-      {
-      // schedule the upload file commands, which will reschedule themselves upon completion
-      for (int i = 0; i < MAX_NUM_UPLOAD_THREADS; i++)
+      if (listener != null)
          {
-         scheduleNextFileUpload(new UploadFileCommand(), i, TimeUnit.SECONDS);
+         eventListeners.add(listener);
          }
       }
 
-   /**
-    * Shuts down <code>DataFileUploader</code>, causing it to stop uploading {@link DataFile}s. Once it is shut down, it
-    * cannot be started up again.
-    */
-   public void shutdown()
+   public void removeEventListener(@Nullable final EventListener listener)
       {
-      LOG.debug("DataFileUploader.shutdown()");
-      super.shutdown();
+      if (listener != null)
+         {
+         eventListeners.remove(listener);
+         }
       }
 
-   @Override
-   @NotNull
-   protected ExecutorService getExecutor()
+   public void submitUploadFileTask(@Nullable final File fileToUpload, @Nullable final String originalFilename)
       {
-      return executor;
+      if (LOG.isDebugEnabled())
+         {
+         LOG.debug("DataFileUploader.submitUploadFileTask(" + fileToUpload + ", " + originalFilename + ")");
+         }
+
+      if (fileToUpload != null && originalFilename != null)
+         {
+         executor.execute(new UploadFileTask(fileToUpload, originalFilename));
+         }
       }
 
-   private void scheduleNextFileUpload(final Runnable uploadFileCommand, final int delay, final TimeUnit timeUnit)
+   private final class UploadFileTask implements Runnable
       {
-      executor.schedule(uploadFileCommand, delay, timeUnit);
-      }
+      private final File fileToUpload;
+      private final String originalFilename;
 
-   private final class UploadFileCommand implements Runnable
-      {
-      private final HttpClient httpClient = new DefaultHttpClient();
+      private UploadFileTask(@NotNull final File fileToUpload, @NotNull final String originalFilename)
+         {
+         this.fileToUpload = fileToUpload;
+         this.originalFilename = originalFilename;
+         }
 
       @Override
       public void run()
          {
-         // request an uploadable file from the filesystem
-         final File fileToUpload = getDataFileManager().getFileToUpload();
-         if (fileToUpload != null)
-            {
-            if (LOG.isDebugEnabled())
-               {
-               LOG.debug("DataFileUploader$UploadFileCommand.run(): Uploading file [" + fileToUpload + "]");
-               }
-
-            final DataFileUploadResponse uploadResponse = uploadFile(fileToUpload);
-
-            LOG.debug("DataFileUploader$UploadFileCommand.run(): Upload complete, notifying DataFileManager");
-            getDataFileManager().uploadComplete(fileToUpload, uploadResponse);
-
-            // now reschedule accordingly
-            if (uploadResponse == null)
-               {
-               scheduleNextUpload("File upload failed", 1, TimeUnit.MINUTES);
-               }
-            else
-               {
-               scheduleNextUpload("File upload succeeded", 5, TimeUnit.SECONDS);
-               }
-            }
-         else
-            {
-            scheduleNextUpload("No files available for uploading", 5, TimeUnit.MINUTES);
-            }
-         }
-
-      private void scheduleNextUpload(final String message, final int delay, final TimeUnit timeUnit)
-         {
-         if (isRunning())
-            {
-            if (LOG.isDebugEnabled())
-               {
-               LOG.debug("DataFileUploader$UploadFileCommand.scheduleNextUpload(): " + message + ", scheduling the next upload for " + delay + " " + timeUnit + " from now...");
-               }
-            scheduleNextFileUpload(this, delay, timeUnit);
-            }
-         else
-            {
-            LOG.debug("DataFileUploader$UploadFileCommand.scheduleNextUpload(): uploader was shutdown, so we'll now shut down the HttpClient connection manager");
-
-            // When the HttpClient instance is no longer needed, shut down the connection manager to ensure immediate
-            // deallocation of all system resources
-            httpClient.getConnectionManager().shutdown();
-            }
-         }
-
-      @Nullable
-      private DataFileUploadResponse uploadFile(@NotNull final File fileToUpload)
-         {
-         //
+         DataFileUploadResponse dataFileUploadResponse = null;
+         final HttpClient httpClient = new DefaultHttpClient();
          try
             {
-            // get the filename, without the .uploading extension
-            final int uploadingExtensionPosition = fileToUpload.getName().indexOf(DataFileManager.DataFileStatus.UPLOADING.getFilenameExtension());
-            final String filename;
-            if (uploadingExtensionPosition > 0)
-               {
-               filename = fileToUpload.getName().substring(0, uploadingExtensionPosition);
-               }
-            else
-               {
-               filename = fileToUpload.getName();
-               }
-
-            final HttpPost httpPost = new HttpPost(uploadUrlPrefix + "&filename=" + filename);
-
+            final HttpPost httpPost = new HttpPost(uploadUrlPrefix + "&filename=" + originalFilename);
             final FileEntity entity = new FileEntity(fileToUpload, "application/octet-stream");
             httpPost.setEntity(entity);
 
             if (LOG.isDebugEnabled())
                {
-               LOG.debug("DataFileUploader$UploadFileCommand.uploadFile(): uploading file [" + fileToUpload + "] to [" + httpPost.getURI() + "]...");
+               LOG.debug("DataFileUploader$UploadFileTask.run(): uploading file [" + fileToUpload + "] to [" + httpPost.getURI() + "]...");
                }
             final HttpResponse response = httpClient.execute(httpPost);
             final HttpEntity responseEntity = response.getEntity();
             if (LOG.isDebugEnabled())
                {
-               LOG.debug("DataFileUploader$UploadFileCommand.uploadFile(): response status [" + response.getStatusLine() + "]");
+               LOG.debug("DataFileUploader$UploadFileTask.run(): response status [" + response.getStatusLine() + "]");
                }
 
             if (responseEntity != null)
                {
-
                try
                   {
                   // read the response into a String
@@ -228,41 +142,52 @@ public final class DataFileUploader extends BaseDataFileTransporter
                      }
                   catch (Exception e)
                      {
-                     LOG.error("DataFileUploader$UploadFileCommand.uploadFile(): Exception while parsing the JSON response", e);
+                     LOG.error("DataFileUploader$UploadFileTask.run(): Exception while parsing the JSON response", e);
                      }
 
                   if (LOG.isDebugEnabled())
                      {
-                     LOG.debug("DataFileUploader$UploadFileCommand.uploadFile(): response [" + json + "]");
+                     LOG.debug("DataFileUploader$UploadFileTask.run(): response [" + json + "]");
                      }
 
                   if (json != null)
                      {
                      // now parse the response, converting the JSON into a DataFileUploadResponse
                      final ObjectMapper mapper = new ObjectMapper();
-                     return mapper.readValue(json, DataFileUploadResponseImpl.class);
+                     dataFileUploadResponse = mapper.readValue(json, DataFileUploadResponseImpl.class);
                      }
                   }
                catch (IOException e)
                   {
-                  LOG.error("DataFileUploader$UploadFileCommand.uploadFile(): IOException while reading or parsing the response", e);
+                  LOG.error("DataFileUploader$UploadFileTask.run(): IOException while reading or parsing the response", e);
                   }
                catch (IllegalStateException e)
                   {
-                  LOG.error("DataFileUploader$UploadFileCommand.uploadFile(): IllegalStateException while reading the response", e);
+                  LOG.error("DataFileUploader$UploadFileTask.run(): IllegalStateException while reading the response", e);
                   }
                }
             EntityUtils.consume(responseEntity);
             }
          catch (ClientProtocolException e)
             {
-            LOG.error("DataFileUploader$UploadFileCommand.uploadFile(): ClientProtocolException while trying to upload data file [" + fileToUpload + "]", e);
+            LOG.error("DataFileUploader$UploadFileTask.run(): ClientProtocolException while trying to upload data file [" + fileToUpload + "]", e);
             }
          catch (IOException e)
             {
-            LOG.error("DataFileUploader$UploadFileCommand.uploadFile(): IOException while trying to upload data file [" + fileToUpload + "]", e);
+            LOG.error("DataFileUploader$UploadFileTask.run(): IOException while trying to upload data file [" + fileToUpload + "]", e);
             }
-         return null;
+         finally
+            {
+            // When the HttpClient instance is no longer needed, shut down the connection manager to ensure immediate
+            // deallocation of all system resources
+            httpClient.getConnectionManager().shutdown();
+            }
+
+         // notify listeners
+         for (final EventListener listener : eventListeners)
+            {
+            listener.handleFileUploadedEvent(fileToUpload, dataFileUploadResponse);
+            }
          }
       }
 

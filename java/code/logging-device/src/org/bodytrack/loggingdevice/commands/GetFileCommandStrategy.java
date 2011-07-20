@@ -189,8 +189,13 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
             final long seconds = Integer.parseInt(hexTimestamp, 16);
             timestampInMillis = seconds * 1000;
 
-            // read the expected checksum
-            final long expectedChecksum = ByteBuffer.wrap(data, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER + fileLength, SIZE_IN_BYTES_OF_CHECKSUM).getInt();
+            // Read the expected checksum.  In Java, a checksum is a long and a long is 8 bytes, but the BodyTrack
+            // device only returns 4 bytes to us. In order to use a ByteBuffer to easily convert the bytes to a long, we
+            // need to give the ByteBuffer an array of 8 bytes.  We simply put the checksum data from the device in the
+            // lower 4 bytes of the 8-byte array, and then give it to ByteBuffer for conversion to a long.
+            final byte[] checksumBytes = new byte[8];
+            System.arraycopy(data, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER + fileLength, checksumBytes, 4, SIZE_IN_BYTES_OF_CHECKSUM);
+            final long expectedChecksum = ByteBuffer.wrap(checksumBytes).getLong();
 
             // calculate the actual checksum
             final Checksum checksum = new CRC32();

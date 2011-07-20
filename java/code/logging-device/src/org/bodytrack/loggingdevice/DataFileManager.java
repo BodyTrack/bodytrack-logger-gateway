@@ -6,207 +6,253 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * <p>
- * <code>DataFileManager</code> helps manage {@link DataFile}s for a particular device.
- * </p>
- *
  * @author Chris Bartley (bartley@cmu.edu)
  */
-public class DataFileManager
+public final class DataFileManager implements DataFileUploader.EventListener
    {
    private static final Logger LOG = Logger.getLogger(DataFileManager.class);
 
-   /**
-    * <p>
-    * <code>DataFileStatus</code> represents the various states a {@link DataFile} can be in, from the perspective of
-    * the {@link DataFileManager}.
-    * </p>
-    *
-    * @author Chris Bartley (bartley@cmu.edu)
-    */
-   public static enum DataFileStatus
+   @NotNull
+   private final File dataFileDirectory;
+
+   @Nullable
+   private DataFileUploader dataFileUploader = null;
+
+   private final Lock filesystemLock = new ReentrantLock();
+
+   public DataFileManager(@NotNull final DataStoreServerConfig dataStoreServerConfig,
+                          @NotNull final LoggingDeviceConfig loggingDeviceConfig,
+                          @Nullable final DataFileUploader dataFileUploader)
       {
-         DOWNLOADED(".BT"),
-         UPLOADING(".UPLOADING"),
-         UPLOADED(".BTU");
+      this.dataFileUploader = dataFileUploader;
 
-      private final String filenameExtension;
+      this.dataFileDirectory = LoggingDeviceConstants.FilePaths.getDeviceDataDirectory(dataStoreServerConfig, loggingDeviceConfig);
 
-      /**
-       * Returns the <code>DataFileStatus</code> for the given filename, or <code>null</code> if no match was found or
-       * if the given <code>filename</code> was <code>null</code>.
-       */
-      @Nullable
-      public static DataFileStatus getStatusForFilename(@Nullable final String filename)
+      // Clean up files in data file directory, in case the program was terminated before while an upload was in progress
+      // We'll simply rename any files with the {@link DataFileStatus#UPLOADING} extension so that they have the default
+      // extension.
+      filesystemLock.lock();  // block until condition holds
+      try
          {
-         if (filename != null)
+         final File[] files = dataFileDirectory.listFiles(new DataFileStatusFilenameFilter(DataFileStatus.UPLOADING));
+
+         if (files != null && files.length > 0)
             {
-            for (final DataFileStatus status : DataFileStatus.values())
+            LOG.info("DataFileManager.DataFileManager(): Found [" + files.length + "] file(s) which were being uploaded when the program was last killed.  Renaming them so that they will get uploaded again...");
+            for (final File file : files)
                {
-               if (filename.endsWith(status.getFilenameExtension()))
-                  {
-                  return status;
-                  }
+               changeFileExtension(file, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.DOWNLOADED.getFilenameExtension());
                }
             }
-         return null;
+         }
+      finally
+         {
+         filesystemLock.unlock();
          }
 
-      private DataFileStatus(@NotNull final String filenameExtension)
+      // register self as a listener to the uploader
+      if (dataFileUploader != null)
          {
-         this.filenameExtension = filenameExtension;
+         // first, register as an event listener so we can get notified when uploads are complete
+         dataFileUploader.addEventListener(this);
          }
 
-      @NotNull
-      public String getFilenameExtension()
+      //  If the uploader is non-null, then run through all existing downloaded files and kick off an upload job for each one
+      if (dataFileUploader != null)
          {
-         return filenameExtension;
-         }
-
-      /** Returns whether the given {@link File} has this status. */
-      public boolean hasStatus(final File file)
-         {
-         return file != null &&
-                file.getName().toUpperCase().endsWith(filenameExtension);
-         }
-
-      /**
-       * Simply returns the filename extension.
-       *
-       * @see #getFilenameExtension()
-       */
-      @Override
-      public String toString()
-         {
-         return filenameExtension;
-         }
-      }
-
-   public static final String WRITING_FILENAME_EXTENSION = ".WRITING";
-
-   private static final class Config
-      {
-      private final LoggingDeviceConfig loggingDeviceConfig;
-      private final DataStoreServerConfig dataStoreServerConfig;
-
-      private Config(final LoggingDeviceConfig loggingDeviceConfig, final DataStoreServerConfig dataStoreServerConfig)
-         {
-         this.loggingDeviceConfig = loggingDeviceConfig;
-         this.dataStoreServerConfig = dataStoreServerConfig;
-         }
-
-      public LoggingDeviceConfig getLoggingDeviceConfig()
-         {
-         return loggingDeviceConfig;
-         }
-
-      public DataStoreServerConfig getDataStoreServerConfig()
-         {
-         return dataStoreServerConfig;
-         }
-
-      @Override
-      public boolean equals(final Object o)
-         {
-         if (this == o)
-            {
-            return true;
-            }
-         if (o == null || getClass() != o.getClass())
-            {
-            return false;
-            }
-
-         final Config that = (Config)o;
-
-         if (dataStoreServerConfig != null ? !dataStoreServerConfig.equals(that.dataStoreServerConfig) : that.dataStoreServerConfig != null)
-            {
-            return false;
-            }
-         if (loggingDeviceConfig != null ? !loggingDeviceConfig.equals(that.loggingDeviceConfig) : that.loggingDeviceConfig != null)
-            {
-            return false;
-            }
-
-         return true;
-         }
-
-      @Override
-      public int hashCode()
-         {
-         int result = loggingDeviceConfig != null ? loggingDeviceConfig.hashCode() : 0;
-         result = 31 * result + (dataStoreServerConfig != null ? dataStoreServerConfig.hashCode() : 0);
-         return result;
-         }
-      }
-
-   private static final Map<Config, DataFileManager> INSTANCES = new HashMap<Config, DataFileManager>();
-   private static final Lock INSTANCE_LOCK = new ReentrantLock();
-
-   /**
-    * Returns a <code>DataFileManager</code> for the device specified by the given {@link LoggingDeviceConfig} and
-    * {@link DataStoreServerConfig}.  Returns
-    * <code>null</code> if the given {@link LoggingDeviceConfig} and/or {@link DataStoreServerConfig} is <code>null</code>.
-    */
-   @Nullable
-   public static DataFileManager getInstance(@Nullable final LoggingDeviceConfig loggingDeviceConfig,
-                                             @Nullable final DataStoreServerConfig dataStoreServerConfig)
-      {
-      DataFileManager dataFileManager = null;
-
-      if (loggingDeviceConfig != null && dataStoreServerConfig != null)
-         {
-         INSTANCE_LOCK.lock();  // block until condition holds
+         filesystemLock.lock();  // block until condition holds
          try
             {
-            dataFileManager = INSTANCES.get(loggingDeviceConfig);
-            if (dataFileManager == null)
+            // get the list of all downloaded files
+            final File[] files = dataFileDirectory.listFiles(new DataFileStatusFilenameFilter(DataFileStatus.DOWNLOADED));
+
+            if (files != null && files.length > 0)
                {
-               final Config config = new Config(loggingDeviceConfig, dataStoreServerConfig);
-               dataFileManager = new DataFileManager(config);
-               INSTANCES.put(config, dataFileManager);
+               LOG.info("DataFileManager.DataFileManager(): Found [" + files.length + "] file(s) to upload");
+               for (final File file : files)
+                  {
+                  submitUploadFileTask(file);
+                  }
                }
             }
          finally
             {
-            INSTANCE_LOCK.unlock();
+            filesystemLock.unlock();
             }
          }
-
-      return dataFileManager;
       }
 
-   private final File dataFileDirectory;
-   private final Lock filesystemLock = new ReentrantLock();
-   private final FilenameFilter uploadableFileFilenameFilter =
-         new FilenameFilter()
-         {
-         @Override
-         public boolean accept(final File file, final String filename)
-            {
-            return file != null && filename != null && filename.toUpperCase().endsWith(DataFile.FILENAME_EXTENSION);
-            }
-         };
-
-   /** Creates a <code>DataFileManager</code> for the device specified by the given {@link LoggingDeviceConfig}. */
-   private DataFileManager(@NotNull final Config config)
+   private void submitUploadFileTask(@NotNull final File file)
       {
-      final File serverDirectory = new File(LoggingDeviceConstants.FilePaths.LOGGING_DEVICE_DATA_DIRECTORY, config.getDataStoreServerConfig().getServerName() + "_" + config.getDataStoreServerConfig().getServerPort());
-      dataFileDirectory = new File(serverDirectory, "User" + config.getLoggingDeviceConfig().getUsername() + File.separator + config.getLoggingDeviceConfig().getDeviceNickname());
+      if (dataFileUploader != null)
+         {
+         final File fileToUpload = changeFileExtension(file, DataFileStatus.DOWNLOADED.getFilenameExtension(), DataFileStatus.UPLOADING.getFilenameExtension());
+         if (fileToUpload != null)
+            {
+            LOG.debug("DataFileManager.submitUploadFileTask(): Submitting file [" + fileToUpload.getName() + "] for uploading...");
+            dataFileUploader.submitUploadFileTask(fileToUpload, file.getName());
+            }
+         else
+            {
+            LOG.error("DataFileManager.submitUploadFileTask(): Failed to rename file [" + file.getName() + "] in preparation for uploading it.  Skipping.");
+            }
+         }
+      }
 
-      // make sure the directory exists
-      //noinspection ResultOfMethodCallIgnored
-      dataFileDirectory.mkdirs();
+   @Override
+   public void handleFileUploadedEvent(@NotNull final File uploadedFile, @NotNull final DataFileUploadResponse uploadResponse)
+      {
+      LOG.debug("DataFileManager.handleFileUploadedEvent(" + uploadedFile + ", " + uploadResponse + ")");
+
+      if (DataFileStatus.UPLOADING.hasStatus(uploadedFile))
+         {
+         if (LOG.isDebugEnabled())
+            {
+            if (LOG.isDebugEnabled())
+               {
+               LOG.debug("DataFileManager.handleFileUploadedEvent(): file [" + uploadedFile + "], response = [" + uploadResponse + "]");
+               }
+            }
+
+         if (uploadResponse == null)
+            {
+            // if the response was null, then a problem occurred during upload, so just rename the file and return it
+            // back to the pool of uploadable files.
+
+            if (LOG.isDebugEnabled())
+               {
+               LOG.debug("DataFileManager.handleFileUploadedEvent(): Upload failure for file [" + uploadedFile.getName() + "], so just rename it back to the default and try again later.");
+               }
+
+            filesystemLock.lock();  // block until condition holds
+            try
+               {
+               // change the extension back to the default
+               final File defaultFilename = changeFileExtension(uploadedFile, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.DOWNLOADED.getFilenameExtension());
+               if (defaultFilename == null)
+                  {
+                  LOG.error("DataFileManager.handleFileUploadedEvent(): Failed to rename file [" + uploadedFile + "] back to the default name.  Aborting.");
+                  }
+               else
+                  {
+                  if (LOG.isDebugEnabled())
+                     {
+                     LOG.debug("DataFileManager.handleFileUploadedEvent(): Renamed file [" + uploadedFile + "] to [" + defaultFilename + "]");
+                     }
+                  }
+               }
+            finally
+               {
+               filesystemLock.unlock();
+               }
+            }
+         else
+            {
+            // see if there were any errors or failed bin recs
+            final Integer numFailedBinRecs = uploadResponse.getFailedBinRecs();
+            final List<String> errors = uploadResponse.getErrors();
+            if (numFailedBinRecs == null || numFailedBinRecs > 0 || (errors != null && errors.size() > 0))
+               {
+               // we had a failure, so just rename the local file to mark it as having corrupt data
+               if (LOG.isDebugEnabled())
+                  {
+                  LOG.debug("DataFileManager.handleFileUploadedEvent(): num failed binrecs is [" + numFailedBinRecs + "] and errors is [" + errors + "], so mark the file as having corrupt data");
+                  }
+               filesystemLock.lock();  // block until condition holds
+               try
+                  {
+                  final File corruptFile = changeFileExtension(uploadedFile, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.CORRUPT_DATA.getFilenameExtension());
+                  if (corruptFile == null)
+                     {
+                     LOG.error("DataFileManager.handleFileUploadedEvent(): failed to mark file [" + uploadedFile + "] as having corrupt data!  No further action will be taken on this file.");
+                     }
+                  else
+                     {
+                     LOG.info("DataFileManager.handleFileUploadedEvent(): renamed file [" + uploadedFile + "] to [" + corruptFile + "]  to mark it as having corrupt data");
+                     }
+                  }
+               finally
+                  {
+                  filesystemLock.unlock();
+                  }
+               }
+            else
+               {
+               // no failures!  rename the file to signify that the upload was successful...
+               filesystemLock.lock();  // block until condition holds
+               try
+                  {
+                  // change the extension to the one used for uploaded files
+                  final File newFile = changeFileExtension(uploadedFile, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.UPLOADED.getFilenameExtension());
+                  if (newFile == null)
+                     {
+                     LOG.error("DataFileManager.handleFileUploadedEvent(): Failed to renamed successfully uploaded file [" + uploadedFile.getName() + "]");
+                     }
+                  else
+                     {
+                     if (LOG.isDebugEnabled())
+                        {
+                        LOG.debug("DataFileManager.handleFileUploadedEvent(): Renamed file [" + uploadedFile + "] to [" + newFile + "]");
+                        }
+                     }
+                  }
+               finally
+                  {
+                  filesystemLock.unlock();
+                  }
+
+               // Don't worry about telling the downloader that the file can be deleted here--that'll be handled elsewhere
+               }
+            }
+         }
+      }
+
+   /**
+    * Changes the file extension on the given <code>file</code> from the <code>existingFilenameExtension</code> to
+    * the <code>newFilenameExtension</code>.  Returns the new {@link File} upon success, <code>null</code> on failure.
+    */
+   @Nullable
+   private File changeFileExtension(@NotNull final File file, @NotNull final String existingFilenameExtension, @NotNull final String newFilenameExtension)
+      {
+      filesystemLock.lock();  // block until condition holds
+      try
+         {
+         final int extensionPosition = file.getName().indexOf(existingFilenameExtension);
+         if (extensionPosition >= 0)
+            {
+            final String filenameWithoutOldExtension = file.getName().substring(0, extensionPosition);
+            final File newFilename = new File(file.getParentFile(), filenameWithoutOldExtension + newFilenameExtension);
+            if (file.renameTo(newFilename))
+               {
+               if (LOG.isTraceEnabled())
+                  {
+                  LOG.trace("DataFileManager.changeFileExtension(): renamed file [" + file.getName() + "] to [" + newFilename.getName() + "]");
+                  }
+               return newFilename;
+               }
+            else
+               {
+               if (LOG.isEnabledFor(Level.ERROR))
+                  {
+                  LOG.error("DataFileManager.changeFileExtension(): failed to rename file [" + file.getName() + "] to [" + newFilename.getName() + "]");
+                  }
+               }
+            }
+         }
+      finally
+         {
+         filesystemLock.unlock();
+         }
+      return null;
       }
 
    /**
@@ -246,20 +292,38 @@ public class DataFileManager
                try
                   {
                   // write the file, but use a filename with a special extension to signify the file is being written
-                  final File tempFile = new File(dataFileDirectory, dataFile.getFilename() + WRITING_FILENAME_EXTENSION);
+                  final File tempFile = new File(dataFileDirectory, dataFile.getBaseFilename() + DataFileStatus.WRITING.getFilenameExtension());
                   os = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tempFile)));
                   dataFile.writeToOutputStream(os);
 
+                  // check the checksum, and use it to determine which file extension our new file should have.
+                  final DataFileStatus status = dataFile.isChecksumCorrect() ? DataFileStatus.DOWNLOADED : DataFileStatus.INCORRECT_CHECKSUM;
+
+                  if (!dataFile.isChecksumCorrect())
+                     {
+                     LOG.info("DataFileManager.save(): checksum failed for data file [" + dataFile.getFilename() + "]");
+                     }
+
                   // rename the file
-                  final File file = new File(dataFileDirectory, dataFile.getFilename());
-                  final boolean wasRenameSuccessful = tempFile.renameTo(file);
-                  if (wasRenameSuccessful)
+                  final File file = changeFileExtension(tempFile, DataFileStatus.WRITING.getFilenameExtension(), status.getFilenameExtension());
+                  if (file != null)
                      {
                      // success, so return the file
                      if (LOG.isDebugEnabled())
                         {
                         LOG.debug("DataFileManager.save(): DataFile [" + file + "] saved successfully");
                         }
+
+                     if (dataFile.isChecksumCorrect())
+                        {
+                        // submit an upload task
+                        submitUploadFileTask(file);
+                        }
+                     else
+                        {
+                        LOG.error("DataFileManager.save(): Upload task not submitted for data file [" + file + "] since the checksum is incorrect.");
+                        }
+
                      return file;
                      }
                   else
@@ -303,190 +367,42 @@ public class DataFileManager
       }
 
    /**
-    * Finds a file in need of uploading, renames it to signify it's being uploaded, and returns it to the caller.
-    * Returns <code>null</code> if no files are ready for uploading.
+    * If a file already exists with the same {@link DataFile#getBaseFilename() base filename} as the given
+    * <code>filename</code>, then this method returns the {@link DataFileStatus} of that file; otherwise it returns
+    * <code>null</code>.  This method also returns <code>null</code> if the given <code>filename</code> is
+    * <code>null</code>.
     */
    @Nullable
-   public File getFileToUpload()
+   public DataFileStatus getDataFileStatusOfAnyMatchingFile(@Nullable final String filename)
       {
       filesystemLock.lock();  // block until condition holds
       try
          {
-         // get all files ready for uploading
-         final File[] uploadableFiles = dataFileDirectory.listFiles(uploadableFileFilenameFilter);
-         if (uploadableFiles != null && uploadableFiles.length > 0)
+         if (filename != null)
             {
-            // just choose the first valid one
-            final File file = uploadableFiles[0];
-
-            // mark a file as being uploaded simply by changing its extension
-            final File fileToUpload = new File(dataFileDirectory, file.getName() + DataFileStatus.UPLOADING.getFilenameExtension());
-
-            // make sure the file doesn't already exist before renaming it (it shouldn't ever happen, but...)
-            if (fileToUpload.exists())
+            // get the base filename
+            final int dotPosition = filename.indexOf('.');
+            final String baseFilename;
+            if (dotPosition >= 0)
                {
-               LOG.error("DataFileManager.getFileToUpload(): File [" + fileToUpload + "] already exists, so another thread must be uploading it.  Aborting and returning null.");
+               baseFilename = filename.substring(0, dotPosition);
                }
             else
                {
-               final boolean wasRenameSuccessful = file.renameTo(fileToUpload);
-               if (wasRenameSuccessful)
-                  {
-                  // success, so return the file
-                  if (LOG.isDebugEnabled())
-                     {
-                     LOG.debug("DataFileManager.getFileToUpload(): Returning file [" + fileToUpload + "]");
-                     }
-                  return fileToUpload;
-                  }
-               else
-                  {
-                  LOG.error("DataFileManager.getFileToUpload(): Failed to rename file [" + file + "] to [" + fileToUpload + "].  Aborting and returning null.");
-                  }
+               baseFilename = filename;
+               }
+
+            final File[] files = getFilesWithSameBaseFilename(baseFilename);
+            if (files != null && files.length > 0 && files[0] != null)
+               {
+               return DataFileStatus.getStatusForFilename(files[0].getName());
                }
             }
-         else
-            {
-            LOG.debug("DataFileManager.getFileToUpload(): No uploadable files found, returning null");
-            }
+         return null;
          }
       finally
          {
          filesystemLock.unlock();
-         }
-
-      return null;
-      }
-
-   public void uploadComplete(@Nullable final File uploadedFile, @Nullable final DataFileUploadResponse uploadResponse)
-      {
-      if (DataFileStatus.UPLOADING.hasStatus(uploadedFile))
-         {
-         if (LOG.isDebugEnabled())
-            {
-            if (LOG.isDebugEnabled())
-               {
-               LOG.debug("DataFileManager.uploadComplete(): file [" + uploadedFile + "], response = [" + uploadResponse + "]");
-               }
-            }
-
-         if (uploadResponse == null)
-            {
-            // if the response was null, then a problem occurred during upload, so just rename the file and return it
-            // back to the pool of uploadable files.
-
-            filesystemLock.lock();  // block until condition holds
-            try
-               {
-               // change the extension back to the default
-               final String newFilename = uploadedFile.getName().substring(0, uploadedFile.getName().length() - DataFileStatus.UPLOADING.getFilenameExtension().length());
-               final File file = new File(dataFileDirectory, newFilename);
-
-               if (file.exists())
-                  {
-                  // this shouldn't happen, but...
-                  LOG.error("DataFileManager.uploadComplete(): File [" + file + "] already exists--this shouldn't happen!  Aborting.");
-                  }
-               else
-                  {
-                  final boolean wasRenameSuccessful = uploadedFile.renameTo(file);
-                  if (wasRenameSuccessful)
-                     {
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileManager.getFileToUpload(): Renamed file [" + uploadedFile + "] to [" + file + "]");
-                        }
-                     }
-                  else
-                     {
-                     LOG.error("DataFileManager.getFileToUpload(): Failed to rename file [" + uploadedFile + "] to [" + file + "].  Aborting.");
-                     }
-                  }
-               }
-            finally
-               {
-               filesystemLock.unlock();
-               }
-            }
-         else
-            {
-            final Integer numFailedBinRecs = uploadResponse.getFailedBinRecs();
-            final List<String> errors = uploadResponse.getErrors();
-            if (numFailedBinRecs == null || numFailedBinRecs > 0 || (errors != null && errors.size() > 0))
-               {
-               // TODO: what if the file is corrupt on the device?  This logic will cause repeated upload attempts
-               // to the server, which will always fail, and the file will never get removed from the device.  If
-               // enough of these corrupt files collect on the device, it may eventually fill up.
-
-               // we had a failure, so just delete the local file so that we'll eventually get it again from the device
-               if (LOG.isDebugEnabled())
-                  {
-                  LOG.debug("DataFileManager.uploadComplete(): num failed binrecs is [" + numFailedBinRecs + "] and errors is [" + errors + "], so just delete local copy to allow for a future retry");
-                  }
-               filesystemLock.lock();  // block until condition holds
-               try
-                  {
-                  if (uploadedFile.delete())
-                     {
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileManager.uploadComplete(): deleted file [" + uploadedFile + "]");
-                        }
-                     }
-                  else
-                     {
-                     LOG.error("DataFileManager.uploadComplete(): failed to delete file [" + uploadedFile + "]");
-                     }
-                  }
-               finally
-                  {
-                  filesystemLock.unlock();
-                  }
-               }
-            else
-               {
-               // no failures!  rename the file to signify that the upload was successful...
-
-               filesystemLock.lock();  // block until condition holds
-               try
-                  {
-                  // change the extension to the one used for uploaded files
-                  final String newFilename = uploadedFile.getName().substring(0, uploadedFile.getName().indexOf(DataFile.FILENAME_EXTENSION)) + DataFileStatus.UPLOADED.getFilenameExtension();
-                  final File file = new File(dataFileDirectory, newFilename);
-
-                  if (file.exists())
-                     {
-                     // this shouldn't happen, but...
-                     LOG.error("DataFileManager.uploadComplete(): File [" + file + "] already exists--this shouldn't happen!  Aborting.");
-                     // TODO: maybe a better thing to do here would be to diff the two files, make sure they're the same and, if so, then just
-                     // delete the .UPLOADING one.  Or, better yet, don't even try to upload a .BT if a corresponding and identical .BTU exists.
-                     // Not sure yet what to do if the diff fails.
-                     }
-                  else
-                     {
-                     final boolean wasRenameSuccessful = uploadedFile.renameTo(file);
-                     if (wasRenameSuccessful)
-                        {
-                        if (LOG.isDebugEnabled())
-                           {
-                           LOG.debug("DataFileManager.getFileToUpload(): Renamed file [" + uploadedFile + "] to [" + file + "]");
-                           }
-                        }
-                     else
-                        {
-                        LOG.error("DataFileManager.getFileToUpload(): Failed to rename file [" + uploadedFile + "] to [" + file + "].  Aborting.");
-                        }
-                     }
-                  }
-               finally
-                  {
-                  filesystemLock.unlock();
-                  }
-
-               // Don't worry about telling the device that the file can be deleted here--let the DataFileDownloader
-               // handle that the next time that it tries to fetch the file and sees that it's already been uploaded.
-               }
-            }
          }
       }
 
@@ -496,54 +412,56 @@ public class DataFileManager
     */
    private boolean doesFileExist(@NotNull final DataFile dataFile)
       {
-      final File[] files = getFilesWithSameBaseFilename(dataFile.getBaseFilename());
-
-      return !dataFile.isEmpty() && files != null && files.length > 0;
-      }
-
-   /**
-    * If a file already exists with the same {@link DataFile#getBaseFilename() base filename} as the given
-    * <code>filename</code>, then this method returns the {@link DataFileStatus} of that file; otherwise it returns
-    * <code>null</code>.  This method also returns <code>null</code> if the given <code>filename</code> is
-    * <code>null</code>.
-    */
-   @Nullable
-   public DataFileStatus getDataFileStatus(@Nullable final String filename)
-      {
-      if (filename != null)
+      filesystemLock.lock();  // block until condition holds
+      try
          {
-         final int dotPosition = filename.indexOf('.');
-         final String baseFilename;
-         if (dotPosition >= 0)
-            {
-            baseFilename = filename.substring(0, dotPosition);
-            }
-         else
-            {
-            baseFilename = filename;
-            }
+         final File[] files = getFilesWithSameBaseFilename(dataFile.getBaseFilename());
 
-         final File[] files = getFilesWithSameBaseFilename(baseFilename);
-         if (files != null && files.length > 0 && files[0] != null)
-            {
-            return DataFileStatus.getStatusForFilename(files[0].getName());
-            }
+         return !dataFile.isEmpty() && files != null && files.length > 0;
          }
-      return null;
+      finally
+         {
+         filesystemLock.unlock();
+         }
       }
 
    private File[] getFilesWithSameBaseFilename(final String baseFilename)
       {
-      return dataFileDirectory.listFiles(
-            new FilenameFilter()
-            {
-            private final String baseFilenameUppercase = baseFilename.toUpperCase();
-
-            @Override
-            public boolean accept(final File file, final String filename)
+      filesystemLock.lock();  // block until condition holds
+      try
+         {
+         return dataFileDirectory.listFiles(
+               new FilenameFilter()
                {
-               return file != null && filename != null && filename.toUpperCase().startsWith(baseFilenameUppercase);
-               }
-            });
+               private final String baseFilenameUppercase = baseFilename.toUpperCase();
+
+               @Override
+               public boolean accept(final File file, final String filename)
+                  {
+                  return file != null && filename != null && filename.toUpperCase().startsWith(baseFilenameUppercase);
+                  }
+               });
+         }
+      finally
+         {
+         filesystemLock.unlock();
+         }
+      }
+
+   /** Filters {@link DataFile}s based on their {@link DataFileStatus}. */
+   private static class DataFileStatusFilenameFilter implements FilenameFilter
+      {
+      private final DataFileStatus dataFileStatus;
+
+      private DataFileStatusFilenameFilter(@NotNull final DataFileStatus dataFileStatus)
+         {
+         this.dataFileStatus = dataFileStatus;
+         }
+
+      @Override
+      public boolean accept(final File file, final String filename)
+         {
+         return file != null && filename != null && filename.toUpperCase().endsWith(dataFileStatus.getFilenameExtension());
+         }
       }
    }

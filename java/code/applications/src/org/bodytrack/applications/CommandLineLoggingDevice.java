@@ -146,16 +146,8 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
             }
          else
             {
-            manager = DataFileManager.getInstance(loggingDeviceConfig, dataStoreServerConfig);
-            if (manager == null)
-               {
-               println("Failed to create the DataFileManager.  You will need to reconnect.");
-               disconnect();
-               }
-            else
-               {
-               println("Connection successful!");
-               }
+            manager = new DataFileManager(dataStoreServerConfig, loggingDeviceConfig, null);
+            println("Connection successful!");
             }
          }
       return manager;

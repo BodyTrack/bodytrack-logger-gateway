@@ -6,8 +6,11 @@ import edu.cmu.ri.createlab.device.CreateLabDevicePingFailureEventListener;
 import edu.cmu.ri.createlab.serial.commandline.SerialDeviceCommandLineApplication;
 import org.apache.log4j.Logger;
 import org.bodytrack.loggingdevice.DataFileDownloader;
+import org.bodytrack.loggingdevice.DataFileManager;
 import org.bodytrack.loggingdevice.DataFileUploader;
+import org.bodytrack.loggingdevice.DataStoreServerConfig;
 import org.bodytrack.loggingdevice.LoggingDevice;
+import org.bodytrack.loggingdevice.LoggingDeviceConfig;
 import org.bodytrack.loggingdevice.LoggingDeviceFactory;
 
 /**
@@ -24,7 +27,6 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
 
    private LoggingDevice device;
    private DataFileDownloader dataFileDownloader;
-   private DataFileUploader dataFileUploader;
 
    private final CreateLabDevicePingFailureEventListener pingFailureEventListener =
          new CreateLabDevicePingFailureEventListener()
@@ -73,11 +75,20 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                   device.addCreateLabDevicePingFailureEventListener(pingFailureEventListener);
                   println("Connection successful, starting up the DataFileDownloader and DataFileUploader...");
 
-                  dataFileDownloader = new DataFileDownloader(device);
-                  dataFileDownloader.startup();
+                  final DataStoreServerConfig dataStoreServerConfig = device.getDataStoreServerConfig();
+                  final LoggingDeviceConfig loggingDeviceConfig = device.getLoggingDeviceConfig();
 
-                  dataFileUploader = new DataFileUploader(device);
-                  dataFileUploader.startup();
+                  if (dataStoreServerConfig != null && loggingDeviceConfig != null)
+                     {
+                     final DataFileUploader dataFileUploader = new DataFileUploader(dataStoreServerConfig, loggingDeviceConfig);
+
+                     final DataFileManager dataFileManager = new DataFileManager(dataStoreServerConfig,
+                                                                                 loggingDeviceConfig,
+                                                                                 dataFileUploader);
+
+                     dataFileDownloader = new DataFileDownloader(device, dataFileManager);
+                     dataFileDownloader.startup();
+                     }
                   }
                }
             }
@@ -154,12 +165,6 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
          dataFileDownloader.shutdown();
          }
 
-      // shutdown the uploader
-      if (dataFileUploader != null)
-         {
-         dataFileUploader.shutdown();
-         }
-
       // disconnect from the device
       if (willTryToDisconnectFromDevice && device != null)
          {
@@ -169,6 +174,5 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
       // set to null
       device = null;
       dataFileDownloader = null;
-      dataFileUploader = null;
       }
    }
