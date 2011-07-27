@@ -30,10 +30,10 @@ public interface LoggingDevice extends CreateLabDeviceProxy
    DataFile getFile(@Nullable final String filename) throws NoSuchFileException;
 
    /**
-    * Requests that the device erases the file specified by the given <code>filename</code>.  Returns <code>true</code>
+    * Requests that the device deletes the file specified by the given <code>filename</code>.  Returns <code>true</code>
     * upon success, <code>false</code> otherwise.
     */
-   boolean eraseFile(@Nullable final String filename);
+   boolean deleteFile(@Nullable final String filename);
 
    /** Returns the {@link LoggingDeviceConfig configuration} for this <code>LoggingDevice</code>. */
    @Nullable

@@ -21,7 +21,7 @@ public final class DataFileDownloader
 
    private final LoggingDevice device;
    private final DataFileManager dataFileManager;
-   private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory(DataFileDownloader.class + ".executor"));
+   private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory(this.getClass() + ".executor"));
    private final Runnable downloadFileCommand = new DownloadFileCommand();
 
    private boolean isRunning = false;
@@ -151,76 +151,34 @@ public final class DataFileDownloader
                   LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Procesing file [" + filename + "]");
                   }
 
-               // check whether this file is one we already have and, if so, get its status
-               final DataFileStatus fileStatus = dataFileManager.getDataFileStatusOfAnyMatchingFile(filename);
+               final DataFileManager.ActionToPerformOnDeviceDataFile actionToPerformOnDeviceDataFile = dataFileManager.getActionToPerformOnDeviceDataFile(filename);
 
-               if (fileStatus == null)
+               switch (actionToPerformOnDeviceDataFile)
                   {
-                  // the file doesn't already exist on disk, so try to download it from the device
-                  if (!downloadFileFromDevice(filename))
-                     {
-                     delayUntilNextDownload = 1;
-                     timeUnit = TimeUnit.MINUTES;
-                     }
-                  }
-               else
-                  {
-                  // the file already exists, so branch according to the file status
-                  switch (fileStatus)
-                     {
-                     case WRITING:
-                        // if the file is currently being written (this shouldn't happen!) then don't do anything
-                        if (LOG.isDebugEnabled())
-                           {
-                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] is currently being written, so there's no need to download it again from the device");
-                           }
-                        break;
+                  case NO_ACTION:
+                     if (LOG.isDebugEnabled())
+                        {
+                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): No action necessary for file [" + filename + "].");
+                        }
+                     break;
+                  case DELETE_FROM_DEVICE:
+                     if (LOG.isDebugEnabled())
+                        {
+                        LOG.debug("DataFileDownloader$DownloadFileCommand.run(): Attempting to delete file [" + filename + "].");
+                        }
+                     deleteFileFromDevice(filename);
+                     break;
+                  case DOWNLOAD_FROM_DEVICE:
+                     // the file doesn't already exist on disk, so try to download it from the device
+                     if (!downloadFileFromDevice(filename))
+                        {
+                        delayUntilNextDownload = 1;
+                        timeUnit = TimeUnit.MINUTES;
+                        }
+                     break;
 
-                     case DOWNLOADED:
-                        // if the file has already been downloaded, then don't do anything
-                        if (LOG.isDebugEnabled())
-                           {
-                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] has already been downloaded, so there's no need to download it again from the device");
-                           }
-                        break;
-
-                     case UPLOADING:
-                        // if the file is currently uploading, then don't do anything
-                        if (LOG.isDebugEnabled())
-                           {
-                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] is currently being uploaded, so there's no need to download it from the device");
-                           }
-                        break;
-
-                     case UPLOADED:
-                        // if the file has already been uploaded, then we can safely delete the file from the device
-                        if (LOG.isDebugEnabled())
-                           {
-                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] has already been uploaded--now asking device to delete the file");
-                           }
-                        eraseFileFromDevice(filename);
-                        break;
-
-                     case CORRUPT_DATA:
-                        // if the file has already been saved to disk and the checksum is correct but the data is correct, then just delete the file from the device
-                        if (LOG.isInfoEnabled())
-                           {
-                           LOG.info("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] has valid checksum but invalid data--now asking device to delete the file");
-                           }
-                        eraseFileFromDevice(filename);
-                        break;
-
-                     case INCORRECT_CHECKSUM:
-                        // if the file has already been saved to disk, but is corrupt, then we should try to re-download (TODO).  For now, though, just ignore it.
-                        if (LOG.isInfoEnabled())
-                           {
-                           LOG.debug("DataFileDownloader$DownloadFileCommand.run(): file [" + filename + "] has already been downloaded but has an incorrect checksum.  Ignore it for now, but a future version of the gateway will re-download from the device");
-                           }
-                        break;
-
-                     default:
-                        LOG.error("DataFileDownloader$DownloadFileCommand.run(): Unexpected DataFileStatus [" + fileStatus + "].  Ignoring.");
-                     }
+                  default:
+                     LOG.error("DataFileDownloader$DownloadFileCommand.run(): Unexpected ActionToPerformOnDeviceDataFile [" + actionToPerformOnDeviceDataFile + "].  Ignoring.");
                   }
                }
             }
@@ -275,23 +233,23 @@ public final class DataFileDownloader
          return success;
          }
 
-      private boolean eraseFileFromDevice(final String filename)
+      private boolean deleteFileFromDevice(final String filename)
          {
-         final boolean wasEraseSuccessful = device.eraseFile(filename);
+         final boolean wasDeleteSuccessful = device.deleteFile(filename);
 
-         if (wasEraseSuccessful)
+         if (wasDeleteSuccessful)
             {
             if (LOG.isDebugEnabled())
                {
-               LOG.debug("DataFileDownloader$DownloadFileCommand.eraseFileFromDevice(): file [" + filename + "] successfully erased from device.");
+               LOG.debug("DataFileDownloader$DownloadFileCommand.deleteFileFromDevice(): file [" + filename + "] successfully deleted from device.");
                }
             }
          else
             {
-            LOG.error("DataFileDownloader$DownloadFileCommand.eraseFileFromDevice(): failed to erase file [" + filename + "] from device.");
+            LOG.error("DataFileDownloader$DownloadFileCommand.deleteFileFromDevice(): failed to delete file [" + filename + "] from device.");
             }
 
-         return wasEraseSuccessful;
+         return wasDeleteSuccessful;
          }
       }
    }

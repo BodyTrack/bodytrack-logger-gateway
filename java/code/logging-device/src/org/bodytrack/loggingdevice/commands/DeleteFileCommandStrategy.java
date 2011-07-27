@@ -8,11 +8,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * @author Chris Bartley (bartley@cmu.edu)
  */
-public class EraseFileCommandStrategy extends CreateLabSerialDeviceReturnValueCommandStrategy<Boolean>
+public class DeleteFileCommandStrategy extends CreateLabSerialDeviceReturnValueCommandStrategy<Boolean>
    {
-   private static final Logger LOG = Logger.getLogger(EraseFileCommandStrategy.class);
+   private static final Logger LOG = Logger.getLogger(DeleteFileCommandStrategy.class);
 
-   /** The command character used to send the erase file command. */
+   /** The command character used to send the delete file command. */
    private static final byte COMMAND_PREFIX = 'E';
 
    /** The size of the expected response, in bytes */
@@ -20,7 +20,7 @@ public class EraseFileCommandStrategy extends CreateLabSerialDeviceReturnValueCo
 
    private final byte[] command;
 
-   public EraseFileCommandStrategy(final String filename)
+   public DeleteFileCommandStrategy(final String filename)
       {
       final String filenameUpperCase = filename.toUpperCase(); // base station uses all upper case for filenames
 
@@ -61,9 +61,9 @@ public class EraseFileCommandStrategy extends CreateLabSerialDeviceReturnValueCo
          {
          final byte[] responseData = response.getData();
 
-         if (LOG.isDebugEnabled())
+         if (LOG.isTraceEnabled())
             {
-            LOG.debug("EraseFileCommandStrategy.convertResponse(): got back [" + responseData.length + "] byte(s)");
+            LOG.trace("DeleteFileCommandStrategy.convertResponse(): got back [" + responseData.length + "] byte(s)");
             }
          return 'T' == (char)responseData[0];
          }

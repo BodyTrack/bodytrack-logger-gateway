@@ -235,7 +235,7 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
                   return;
                   }
 
-               final boolean wasSuccessful = device.eraseFile(filename);
+               final boolean wasSuccessful = device.deleteFile(filename);
                if (wasSuccessful)
                   {
                   println("File '" + filename + "' erased successfully.");

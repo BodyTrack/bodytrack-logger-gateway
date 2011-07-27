@@ -43,7 +43,7 @@ public final class DataFileUploader
       void handleFileUploadedEvent(@NotNull final File uploadedFile, @Nullable final DataFileUploadResponse uploadResponse);
       }
 
-   private final ExecutorService executor = Executors.newFixedThreadPool(MAX_NUM_UPLOAD_THREADS, new DaemonThreadFactory(DataFileUploader.class + ".executor"));
+   private final ExecutorService executor = Executors.newFixedThreadPool(MAX_NUM_UPLOAD_THREADS, new DaemonThreadFactory(this.getClass() + ".executor"));
    private final String uploadUrlPrefix;
    private final Set<EventListener> eventListeners = new HashSet<EventListener>();
 

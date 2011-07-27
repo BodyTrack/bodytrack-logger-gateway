@@ -26,8 +26,8 @@ import edu.cmu.ri.createlab.util.commandexecution.CommandExecutionFailureHandler
 import edu.cmu.ri.createlab.util.thread.DaemonThreadFactory;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.bodytrack.loggingdevice.commands.DeleteFileCommandStrategy;
 import org.bodytrack.loggingdevice.commands.DisconnectCommandStrategy;
-import org.bodytrack.loggingdevice.commands.EraseFileCommandStrategy;
 import org.bodytrack.loggingdevice.commands.GetAvailableFilenamesCommandStrategy;
 import org.bodytrack.loggingdevice.commands.GetFileCommandStrategy;
 import org.bodytrack.loggingdevice.commands.HandshakeCommandStrategy;
@@ -132,7 +132,7 @@ class LoggingDeviceProxy implements LoggingDevice
    private final SerialDeviceReturnValueCommandExecutor<String> stringReturnValueCommandExecutor;
 
    private final Pinger pinger = new Pinger();
-   private final ScheduledExecutorService pingExecutorService = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory("LoggingDeviceProxy.pingExecutorService"));
+   private final ScheduledExecutorService pingExecutorService = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory(this.getClass() + ".pingExecutorService"));
    private final ScheduledFuture<?> pingScheduledFuture;
    private final Collection<CreateLabDevicePingFailureEventListener> createLabDevicePingFailureEventListeners = new HashSet<CreateLabDevicePingFailureEventListener>();
 
@@ -296,15 +296,15 @@ class LoggingDeviceProxy implements LoggingDevice
       }
 
    @Override
-   public boolean eraseFile(final String filename)
+   public boolean deleteFile(final String filename)
       {
       if (filename != null && filename.length() > 0)
          {
-         return booleanReturnValueCommandExecutor.execute(new EraseFileCommandStrategy(filename));
+         return booleanReturnValueCommandExecutor.execute(new DeleteFileCommandStrategy(filename));
          }
       else
          {
-         LOG.error("LoggingDeviceProxy.eraseFile(): filename cannot be null or empty.");
+         LOG.error("LoggingDeviceProxy.deleteFile(): filename cannot be null or empty.");
          }
       return false;
       }
