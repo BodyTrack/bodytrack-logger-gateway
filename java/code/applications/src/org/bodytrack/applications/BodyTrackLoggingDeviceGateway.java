@@ -26,7 +26,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
       }
 
    private LoggingDevice device;
-   private DataFileDownloader dataFileDownloader;
+   private DataFileManager dataFileManager;
 
    private final CreateLabDevicePingFailureEventListener pingFailureEventListener =
          new CreateLabDevicePingFailureEventListener()
@@ -81,13 +81,14 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                   if (dataStoreServerConfig != null && loggingDeviceConfig != null)
                      {
                      final DataFileUploader dataFileUploader = new DataFileUploader(dataStoreServerConfig, loggingDeviceConfig);
+                     final DataFileDownloader dataFileDownloader = new DataFileDownloader(device);
 
-                     final DataFileManager dataFileManager = new DataFileManager(dataStoreServerConfig,
-                                                                                 loggingDeviceConfig,
-                                                                                 dataFileUploader);
+                     dataFileManager = new DataFileManager(dataStoreServerConfig,
+                                                           loggingDeviceConfig,
+                                                           dataFileUploader,
+                                                           dataFileDownloader);
 
-                     dataFileDownloader = new DataFileDownloader(device, dataFileManager);
-                     dataFileDownloader.startup();
+                     dataFileManager.startup();
                      }
                   }
                }
@@ -159,10 +160,10 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
 
    private void disconnect(final boolean willTryToDisconnectFromDevice)
       {
-      // shutdown the downloader
-      if (dataFileDownloader != null)
+      // shutdown the data file manager
+      if (dataFileManager != null)
          {
-         dataFileDownloader.shutdown();
+         dataFileManager.shutdown();
          }
 
       // disconnect from the device
@@ -173,6 +174,6 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
 
       // set to null
       device = null;
-      dataFileDownloader = null;
+      dataFileManager = null;
       }
    }

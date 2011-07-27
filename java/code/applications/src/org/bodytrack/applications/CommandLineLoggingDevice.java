@@ -146,7 +146,7 @@ public class CommandLineLoggingDevice extends SerialDeviceCommandLineApplication
             }
          else
             {
-            manager = new DataFileManager(dataStoreServerConfig, loggingDeviceConfig, null);
+            manager = new DataFileManager(dataStoreServerConfig, loggingDeviceConfig);
             println("Connection successful!");
             }
          }

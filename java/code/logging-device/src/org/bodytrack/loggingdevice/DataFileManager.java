@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -23,34 +24,10 @@ import org.jetbrains.annotations.Nullable;
 /**
  * @author Chris Bartley (bartley@cmu.edu)
  */
-public final class DataFileManager implements DataFileUploader.EventListener
+public final class DataFileManager implements DataFileUploader.EventListener, DataFileDownloader.EventListener
    {
    private static final Logger LOG = Logger.getLogger(DataFileManager.class);
    private static final int NUM_DOWNLOAD_RETRIES_FOR_FAILED_CHECKSUM = 5;
-
-   public static enum ActionToPerformOnDeviceDataFile
-      {
-         NO_ACTION("NO_ACTION"),
-         DELETE_FROM_DEVICE("DELETE_FROM_DEVICE"),
-         DOWNLOAD_FROM_DEVICE("DOWNLOAD_FROM_DEVICE");
-      private final String description;
-
-      ActionToPerformOnDeviceDataFile(final String description)
-         {
-         this.description = description;
-         }
-
-      public String getDescription()
-         {
-         return description;
-         }
-
-      @Override
-      public String toString()
-         {
-         return this.getClass().getSimpleName() + "." + description;
-         }
-      }
 
    @NotNull
    private final File dataFileDirectory;
@@ -58,69 +35,163 @@ public final class DataFileManager implements DataFileUploader.EventListener
    @Nullable
    private DataFileUploader dataFileUploader = null;
 
-   private final Lock filesystemLock = new ReentrantLock();
+   @Nullable
+   private DataFileDownloader dataFileDownloader = null;
+
+   private boolean isRunning = false;
+   private boolean hasBeenShutdown = false;
+
+   private final Lock lock = new ReentrantLock();
    private final Map<String, Integer> retryDownloadCountMap = new HashMap<String, Integer>();
-   private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(4, new DaemonThreadFactory(this.getClass() + ".executor"));
+   private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(10, new DaemonThreadFactory(this.getClass() + ".executor"));
+
+   private final Runnable submitFileListDownloadRunnable =
+         new Runnable()
+         {
+         @Override
+         public void run()
+            {
+            if (dataFileDownloader != null)
+               {
+               dataFileDownloader.submitDataFileListRequestTask();
+               }
+            }
+         };
+
+   public DataFileManager(@NotNull final DataStoreServerConfig dataStoreServerConfig,
+                          @NotNull final LoggingDeviceConfig loggingDeviceConfig)
+      {
+      this(dataStoreServerConfig, loggingDeviceConfig, null, null);
+      }
 
    public DataFileManager(@NotNull final DataStoreServerConfig dataStoreServerConfig,
                           @NotNull final LoggingDeviceConfig loggingDeviceConfig,
-                          @Nullable final DataFileUploader dataFileUploader)
+                          @Nullable final DataFileUploader dataFileUploader,
+                          @Nullable final DataFileDownloader dataFileDownloader)
       {
       this.dataFileUploader = dataFileUploader;
+      this.dataFileDownloader = dataFileDownloader;
+      this.dataFileDirectory = LoggingDeviceGatewayConstants.FilePaths.getDeviceDataDirectory(dataStoreServerConfig, loggingDeviceConfig);
 
-      this.dataFileDirectory = LoggingDeviceConstants.FilePaths.getDeviceDataDirectory(dataStoreServerConfig, loggingDeviceConfig);
+      // register self as a listener to the uploader so we can get notified when uploads are complete
+      if (dataFileUploader != null)
+         {
+         dataFileUploader.addEventListener(this);
+         }
 
-      // Clean up files in data file directory, in case the program was terminated before while an upload was in progress
-      // We'll simply rename any files with the {@link DataFileStatus#UPLOADING} extension so that they have the default
-      // extension.
-      filesystemLock.lock();  // block until condition holds
+      // register self as a listener to the downloader so we can get notified when downloads are complete
+      if (dataFileDownloader != null)
+         {
+         dataFileDownloader.addEventListener(this);
+         }
+      }
+
+   public void startup()
+      {
+      lock.lock();  // block until condition holds
       try
          {
-         final File[] files = dataFileDirectory.listFiles(new DataFileStatusFilenameFilter(DataFileStatus.UPLOADING));
-
-         if (files != null && files.length > 0)
+         if (!isRunning && !hasBeenShutdown)
             {
-            LOG.info("DataFileManager.DataFileManager(): Found [" + files.length + "] file(s) which were being uploaded when the program was last killed.  Renaming them so that they will get uploaded again...");
-            for (final File file : files)
+            isRunning = true;
+
+            // Clean up files in data file directory, in case the program was terminated before while an upload was in
+            // progress We'll simply rename any files with the {@link DataFileStatus#UPLOADING} extension so that they
+            // have the default extension.
+            final File[] filesInUploadingState = dataFileDirectory.listFiles(new DataFileStatusFilenameFilter(DataFileStatus.UPLOADING));
+
+            if (filesInUploadingState != null && filesInUploadingState.length > 0)
                {
-               changeFileExtension(file, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.DOWNLOADED.getFilenameExtension());
+               if (LOG.isInfoEnabled())
+                  {
+                  LOG.info("DataFileManager.startup(): Found [" + filesInUploadingState.length + "] file(s) which were being uploaded when the program was last killed.  Renaming them so that they will get uploaded again...");
+                  }
+               for (final File file : filesInUploadingState)
+                  {
+                  changeFileExtension(file, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.DOWNLOADED.getFilenameExtension());
+                  }
+               }
+
+            //  If the uploader is non-null, then run through all existing downloaded files and kick off an upload job for each one
+            if (dataFileUploader != null)
+               {
+               // get the list of all downloaded files
+               final File[] filesReadyForUpload = dataFileDirectory.listFiles(new DataFileStatusFilenameFilter(DataFileStatus.DOWNLOADED));
+
+               if (filesReadyForUpload != null && filesReadyForUpload.length > 0)
+                  {
+                  if (LOG.isInfoEnabled())
+                     {
+                     LOG.info("DataFileManager.startup(): Found [" + filesReadyForUpload.length + "] file(s) to upload");
+                     }
+                  for (final File file : filesReadyForUpload)
+                     {
+                     submitUploadFileTask(file);
+                     }
+                  }
+               }
+
+            // schedule the command to get the list of files from the device, which will reschedule itself upon completion
+            scheduleNextFileListDownload(0, TimeUnit.SECONDS);
+            }
+         else
+            {
+            LOG.debug("DataFileManager.startup(): Cannot startup since it's already running or has been shutdown.");
+            }
+         }
+      finally
+         {
+         lock.unlock();
+         }
+      }
+
+   private void scheduleNextFileListDownload(final int delay, final TimeUnit timeUnit)
+      {
+      if (dataFileDownloader != null)
+         {
+         executor.schedule(submitFileListDownloadRunnable, delay, timeUnit);
+         }
+      }
+
+   /**
+    * Shuts down the <code>DataFileManager</code>.  Once it is shut down, it cannot be started up again.
+    *
+    * @see #startup()
+    */
+   public void shutdown()
+      {
+      LOG.debug("DataFileManager.shutdown()");
+
+      lock.lock();  // block until condition holds
+      try
+         {
+         if (isRunning)
+            {
+            isRunning = false;
+            hasBeenShutdown = true;
+
+            // shut down the executor
+            try
+               {
+               LOG.debug("DataFileManager.shutdown(): Shutting down the executor");
+               final List<Runnable> unexecutedTasks = executor.shutdownNow();
+               LOG.debug("DataFileManager.shutdown(): Unexecuted tasks: " + (unexecutedTasks == null ? 0 : unexecutedTasks.size()));
+               LOG.debug("DataFileManager.shutdown(): Waiting up to 30 seconds for the executor to shutdown...");
+               final boolean terminatedNormally = executor.awaitTermination(30, TimeUnit.SECONDS);
+               if (LOG.isDebugEnabled())
+                  {
+                  LOG.debug("DataFileManager.shutdown(): Executor successfully shutdown (timed out = " + !terminatedNormally + ")");
+                  }
+               }
+            catch (Exception e)
+               {
+               LOG.error("DataFileManager.shutdown(): Exception while trying to shut down the executor", e);
                }
             }
          }
       finally
          {
-         filesystemLock.unlock();
-         }
-
-      // register self as a listener to the uploader
-      if (dataFileUploader != null)
-         {
-         // first, register as an event listener so we can get notified when uploads are complete
-         dataFileUploader.addEventListener(this);
-         }
-
-      //  If the uploader is non-null, then run through all existing downloaded files and kick off an upload job for each one
-      if (dataFileUploader != null)
-         {
-         filesystemLock.lock();  // block until condition holds
-         try
-            {
-            // get the list of all downloaded files
-            final File[] files = dataFileDirectory.listFiles(new DataFileStatusFilenameFilter(DataFileStatus.DOWNLOADED));
-
-            if (files != null && files.length > 0)
-               {
-               LOG.info("DataFileManager.DataFileManager(): Found [" + files.length + "] file(s) to upload");
-               for (final File file : files)
-                  {
-                  submitUploadFileTask(file);
-                  }
-               }
-            }
-         finally
-            {
-            filesystemLock.unlock();
-            }
+         lock.unlock();
          }
       }
 
@@ -166,7 +237,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
                LOG.debug("DataFileManager.handleFileUploadedEvent(): Upload failure for file [" + uploadedFile.getName() + "], so just rename it back to the default and try again later.");
                }
 
-            filesystemLock.lock();  // block until condition holds
+            lock.lock();  // block until condition holds
             try
                {
                // change the extension back to the default
@@ -198,7 +269,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
                }
             finally
                {
-               filesystemLock.unlock();
+               lock.unlock();
                }
             }
          else
@@ -213,7 +284,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
                   {
                   LOG.debug("DataFileManager.handleFileUploadedEvent(): num failed binrecs is [" + numFailedBinRecs + "] and errors is [" + errors + "], so mark the file as having corrupt data");
                   }
-               filesystemLock.lock();  // block until condition holds
+               lock.lock();  // block until condition holds
                try
                   {
                   final File corruptFile = changeFileExtension(uploadedFile, DataFileStatus.UPLOADING.getFilenameExtension(), DataFileStatus.CORRUPT_DATA.getFilenameExtension());
@@ -228,13 +299,13 @@ public final class DataFileManager implements DataFileUploader.EventListener
                   }
                finally
                   {
-                  filesystemLock.unlock();
+                  lock.unlock();
                   }
                }
             else
                {
                // no failures!  rename the file to signify that the upload was successful...
-               filesystemLock.lock();  // block until condition holds
+               lock.lock();  // block until condition holds
                try
                   {
                   // change the extension to the one used for uploaded files
@@ -253,13 +324,191 @@ public final class DataFileManager implements DataFileUploader.EventListener
                   }
                finally
                   {
-                  filesystemLock.unlock();
+                  lock.unlock();
                   }
 
                // Don't worry about telling the downloader that the file can be deleted here--that'll be handled elsewhere
                }
             }
          }
+      }
+
+   @Override
+   public void handleDataFileListEvent(@NotNull final SortedSet<String> availableFilenames)
+      {
+      LOG.debug("DataFileManager.handleFileListEvent()");
+
+      int delayUntilNextFileListRequest = 1;
+      TimeUnit timeUnit = TimeUnit.SECONDS;
+
+      if (availableFilenames.isEmpty())
+         {
+         // no files available
+         LOG.debug("DataFileManager.handleFileListEvent(): No data files are available.");
+         delayUntilNextFileListRequest = 1;
+         timeUnit = TimeUnit.MINUTES;
+         }
+      else
+         {
+         if (LOG.isDebugEnabled())
+            {
+            LOG.debug("DataFileManager.handleFileListEvent(): Processing [" + availableFilenames.size() + "] file(s)...");
+            }
+
+         for (final String filename : availableFilenames)
+            {
+            if (LOG.isDebugEnabled())
+               {
+               LOG.debug("DataFileManager.handleFileListEvent(): Procesing file [" + filename + "]");
+               }
+
+            // determine what action to take for this file
+            lock.lock();  // block until condition holds
+            try
+               {
+               // check whether this file is one we already have and, if so, get its status
+               final DataFileStatus fileStatus = getDataFileStatusForBaseFilename(computeBaseFilename(filename));
+
+               if (fileStatus == null)
+                  {
+                  if (LOG.isDebugEnabled())
+                     {
+                     LOG.debug("DataFileManager.handleFileListEvent(): DataFileStatus for file [" + filename + "] is null, so submit a task to download it.");
+                     }
+                  dataFileDownloader.submitDownloadDataFileTask(filename);
+                  }
+               else
+                  {
+                  switch (fileStatus)
+                     {
+                     case WRITING:
+                        // if the file is currently being written (this shouldn't happen!) then don't do anything
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileManager.handleFileListEvent(): file [" + filename + "] is currently being written, so no further action is required at this time.");
+                           }
+                        break;
+
+                     case DOWNLOADED:
+                        // if the file has already been downloaded and has the DOWNLOADED status, then its checksum is OK so it can be deleted from the device.
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileManager.handleFileListEvent(): file [" + filename + "] has already been downloaded successfully, so submit a task for it to be deleted from the device.");
+                           }
+                        dataFileDownloader.submitDeleteDataFileFromDeviceTask(filename);
+
+                        break;
+
+                     case UPLOADING:
+                        // if the file is currently uploading, then the checksum must be correct, so we can safely delete the file from the device
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileManager.handleFileListEvent(): file [" + filename + "] is currently being uploaded, so submit a task for it to be deleted from the device.");
+                           }
+                        dataFileDownloader.submitDeleteDataFileFromDeviceTask(filename);
+
+                        break;
+
+                     case UPLOADED:
+                        // if the file has already been uploaded, then we can safely delete the file from the device
+                        if (LOG.isDebugEnabled())
+                           {
+                           LOG.debug("DataFileManager.handleFileListEvent(): file [" + filename + "] has already been uploaded, so submit a task for it to be deleted from the device.");
+                           }
+                        dataFileDownloader.submitDeleteDataFileFromDeviceTask(filename);
+
+                        break;
+
+                     case CORRUPT_DATA:
+                        // if the file has already been saved to disk and the checksum is correct but the data is correct, then just delete the file from the device
+                        if (LOG.isInfoEnabled())
+                           {
+                           LOG.info("DataFileManager.handleFileListEvent(): file [" + filename + "] has valid checksum but invalid data, so submit a task for it to be deleted from the device.");
+                           }
+                        dataFileDownloader.submitDeleteDataFileFromDeviceTask(filename);
+
+                        break;
+
+                     case INCORRECT_CHECKSUM:
+                        // If the file has already been saved to disk, but the checksum is incorrect, then we should try to
+                        // re-download up to NUM_DOWNLOAD_RETRIES_FOR_FAILED_CHECKSUM times.
+                        if (incrementAndGetRetryDownloadCount(filename) < NUM_DOWNLOAD_RETRIES_FOR_FAILED_CHECKSUM)
+                           {
+                           if (LOG.isInfoEnabled())
+                              {
+                              LOG.debug("DataFileManager.handleFileListEvent(): file [" + filename + "] has already been downloaded but had an incorrect checksum.  Submitting a task to retry the download...");
+                              }
+
+                           dataFileDownloader.submitDownloadDataFileTask(filename);
+                           }
+                        else
+                           {
+                           if (LOG.isInfoEnabled())
+                              {
+                              LOG.debug("DataFileManager.handleFileListEvent(): file [" + filename + "] has already been downloaded but had an incorrect checksum.  Will submit a task to delete the file from the device.");
+                              }
+
+                           dataFileDownloader.submitDeleteDataFileFromDeviceTask(filename);
+                           }
+                        break;
+
+                     default:
+                        LOG.error("DataFileManager.handleFileListEvent(): Unexpected DataFileStatus [" + fileStatus + "].  Ignoring.");
+                     }
+                  }
+               }
+            finally
+               {
+               lock.unlock();
+               }
+            }
+         }
+
+      if (LOG.isDebugEnabled())
+         {
+         LOG.debug("DataFileManager.handleFileListEvent(): Scheduling the next file list request with a delay of " + delayUntilNextFileListRequest + " " + timeUnit);
+         }
+      scheduleNextFileListDownload(delayUntilNextFileListRequest, timeUnit);
+      }
+
+   @Override
+   public void handleSuccessfulDataFileDownloadEvent(@Nullable final DataFile dataFile)
+      {
+      if (dataFile != null)
+         {
+         if (LOG.isDebugEnabled())
+            {
+            LOG.debug("DataFileManager.handleFileDownloadedEvent(" + dataFile.getBaseFilename() + ")");
+            }
+         try
+            {
+            save(dataFile);
+            }
+         catch (IOException e)
+            {
+            LOG.error("DataFileManager.handleSuccessfulDataFileDownloadEvent(): IOException while trying to save data file [" + dataFile + "]", e);
+            }
+         }
+      }
+
+   @Override
+   public void handleFailedDataFileDownloadEvent(@NotNull final String filename, @NotNull final DataFileDownloader.FailedDataFileDownloadCause cause)
+      {
+      if (LOG.isDebugEnabled())
+         {
+         LOG.debug("DataFileManager.handleFailedDataFileDownloadEvent(" + filename + "," + cause + ")");
+         }
+      }
+
+   @Override
+   public void handleDeleteDataFileFromDeviceEvent(@NotNull final String filename, final boolean wasDeleteSuccessful)
+      {
+      if (LOG.isDebugEnabled())
+         {
+         LOG.debug("DataFileManager.handleDeleteDataFileFromDeviceEvent(" + filename + "," + wasDeleteSuccessful + ")");
+         }
+
+      retryDownloadCountMap.remove(filename);
       }
 
    /**
@@ -269,7 +518,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
    @Nullable
    private File changeFileExtension(@NotNull final File file, @NotNull final String existingFilenameExtension, @NotNull final String newFilenameExtension)
       {
-      filesystemLock.lock();  // block until condition holds
+      lock.lock();  // block until condition holds
       try
          {
          final int extensionPosition = file.getName().indexOf(existingFilenameExtension);
@@ -296,7 +545,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
          }
       finally
          {
-         filesystemLock.unlock();
+         lock.unlock();
          }
       return null;
       }
@@ -319,7 +568,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
             LOG.debug("DataFileManager.save(): Request to save DataFile [" + dataFile.getFilename() + "]");
             }
 
-         filesystemLock.lock();  // block until condition holds
+         lock.lock();  // block until condition holds
          try
             {
             // see whether the file already exists (in some form)
@@ -448,7 +697,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
             }
          finally
             {
-            filesystemLock.unlock();
+            lock.unlock();
             }
          }
       return null;
@@ -462,7 +711,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
    @Nullable
    private DataFileStatus getDataFileStatusForBaseFilename(@NotNull final String baseFilename)
       {
-      filesystemLock.lock();  // block until condition holds
+      lock.lock();  // block until condition holds
       try
          {
          final File[] files = getFilesWithSameBaseFilename(baseFilename);
@@ -475,125 +724,8 @@ public final class DataFileManager implements DataFileUploader.EventListener
          }
       finally
          {
-         filesystemLock.unlock();
+         lock.unlock();
          }
-      }
-
-   /**
-    * Determines what action should be taken for a file on the device having the given <code>filename</code>.  This
-    * method inspects the local data file directory, looking for files having the same base filename and then returns
-    * the appropriate action to take.
-    */
-   @NotNull
-   public ActionToPerformOnDeviceDataFile getActionToPerformOnDeviceDataFile(@Nullable final String filename)
-      {
-      if (filename != null)
-         {
-         filesystemLock.lock();  // block until condition holds
-         try
-            {
-            // check whether this file is one we already have and, if so, get its status
-            final DataFileStatus fileStatus = getDataFileStatusForBaseFilename(computeBaseFilename(filename));
-
-            final ActionToPerformOnDeviceDataFile actionToPerform;
-            if (fileStatus == null)
-               {
-               if (LOG.isDebugEnabled())
-                  {
-                  LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): DataFileStatus for file [" + filename + "] is null, so download it.");
-                  }
-               actionToPerform = ActionToPerformOnDeviceDataFile.DOWNLOAD_FROM_DEVICE;
-               }
-            else
-               {
-               switch (fileStatus)
-                  {
-                  case WRITING:
-                     // if the file is currently being written (this shouldn't happen!) then don't do anything
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] is currently being written, so no further action is required at this time.");
-                        }
-                     actionToPerform = ActionToPerformOnDeviceDataFile.NO_ACTION;
-                     break;
-
-                  case DOWNLOADED:
-                     // if the file has already been downloaded and has the DOWNLOADED status, then its checksum is OK so it can be deleted from the device.
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] has already been downloaded successfully, so it can be deleted from the device.");
-                        }
-                     actionToPerform = ActionToPerformOnDeviceDataFile.DELETE_FROM_DEVICE;
-                     break;
-
-                  case UPLOADING:
-                     // if the file is currently uploading, then the checksum must be correct, so we can safely delete the file from the device
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] is currently being uploaded, so it can be deleted from the device.");
-                        }
-                     actionToPerform = ActionToPerformOnDeviceDataFile.DELETE_FROM_DEVICE;
-                     break;
-
-                  case UPLOADED:
-                     // if the file has already been uploaded, then we can safely delete the file from the device
-                     if (LOG.isDebugEnabled())
-                        {
-                        LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] has already been uploaded, so it can be deleted from the device.");
-                        }
-                     actionToPerform = ActionToPerformOnDeviceDataFile.DELETE_FROM_DEVICE;
-                     break;
-
-                  case CORRUPT_DATA:
-                     // if the file has already been saved to disk and the checksum is correct but the data is correct, then just delete the file from the device
-                     if (LOG.isInfoEnabled())
-                        {
-                        LOG.info("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] has valid checksum but invalid data, so it can be deleted from the device.");
-                        }
-                     actionToPerform = ActionToPerformOnDeviceDataFile.DELETE_FROM_DEVICE;
-                     break;
-
-                  case INCORRECT_CHECKSUM:
-                     // If the file has already been saved to disk, but the checksum is incorrect, then we should try to
-                     // re-download up to NUM_DOWNLOAD_RETRIES_FOR_FAILED_CHECKSUM times.
-                     if (incrementAndGetRetryDownloadCount(filename) < NUM_DOWNLOAD_RETRIES_FOR_FAILED_CHECKSUM)
-                        {
-                        if (LOG.isInfoEnabled())
-                           {
-                           LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] has already been downloaded but had an incorrect checksum.  Attempting to retry the download...");
-                           }
-
-                        actionToPerform = ActionToPerformOnDeviceDataFile.DOWNLOAD_FROM_DEVICE;
-                        }
-                     else
-                        {
-                        if (LOG.isInfoEnabled())
-                           {
-                           LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): file [" + filename + "] has already been downloaded but had an incorrect checksum.  Will delete the file from the device.");
-                           }
-
-                        retryDownloadCountMap.remove(filename);
-                        actionToPerform = ActionToPerformOnDeviceDataFile.DELETE_FROM_DEVICE;
-                        }
-                     break;
-
-                  default:
-                     LOG.error("DataFileManager.getActionToPerformOnDeviceDataFile(): Unexpected DataFileStatus [" + fileStatus + "].  Ignoring.");
-                     actionToPerform = ActionToPerformOnDeviceDataFile.NO_ACTION;
-                  }
-               }
-            if (LOG.isDebugEnabled())
-               {
-               LOG.debug("DataFileManager.getActionToPerformOnDeviceDataFile(): Returning [" + actionToPerform + "]");
-               }
-            return actionToPerform;
-            }
-         finally
-            {
-            filesystemLock.unlock();
-            }
-         }
-      return ActionToPerformOnDeviceDataFile.NO_ACTION;
       }
 
    private String computeBaseFilename(@NotNull final String filename)
@@ -614,7 +746,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
 
    private int incrementAndGetRetryDownloadCount(@NotNull final String filename)
       {
-      filesystemLock.lock();  // block until condition holds
+      lock.lock();  // block until condition holds
       try
          {
          Integer count = retryDownloadCountMap.get(filename);
@@ -627,13 +759,13 @@ public final class DataFileManager implements DataFileUploader.EventListener
          }
       finally
          {
-         filesystemLock.unlock();
+         lock.unlock();
          }
       }
 
    private File[] getFilesWithSameBaseFilename(final String baseFilename)
       {
-      filesystemLock.lock();  // block until condition holds
+      lock.lock();  // block until condition holds
       try
          {
          return dataFileDirectory.listFiles(
@@ -650,7 +782,7 @@ public final class DataFileManager implements DataFileUploader.EventListener
          }
       finally
          {
-         filesystemLock.unlock();
+         lock.unlock();
          }
       }
 

@@ -5,12 +5,12 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * <p>
- * <code>LoggingDeviceConstants</code> defines various constants for BodyTrack Logging Devices.
+ * <code>LoggingDeviceGatewayConstants</code> defines various constants for the BodyTrack Logging Device Gateway.
  * </p>
  *
  * @author Chris Bartley (bartley@cmu.edu)
  */
-public class LoggingDeviceConstants
+public class LoggingDeviceGatewayConstants
    {
    public static final class FilePaths
       {
@@ -29,7 +29,8 @@ public class LoggingDeviceConstants
        * {@link DataStoreServerConfig} and {@link LoggingDeviceConfig} should be stored.
        */
       @NotNull
-      public static File getDeviceDataDirectory(@NotNull final DataStoreServerConfig dataStoreServerConfig, @NotNull final LoggingDeviceConfig loggingDeviceConfig)
+      public static File getDeviceDataDirectory(@NotNull final DataStoreServerConfig dataStoreServerConfig,
+                                                @NotNull final LoggingDeviceConfig loggingDeviceConfig)
          {
          final File serverDirectory = new File(LOGGING_DEVICE_ROOT_DATA_DIRECTORY, dataStoreServerConfig.getServerName() + "_" + dataStoreServerConfig.getServerPort());
          final File deviceDataFileDirectory = new File(serverDirectory, "User" + loggingDeviceConfig.getUsername() + File.separator + loggingDeviceConfig.getDeviceNickname());
@@ -47,7 +48,7 @@ public class LoggingDeviceConstants
          }
       }
 
-   private LoggingDeviceConstants()
+   private LoggingDeviceGatewayConstants()
       {
       // private to prevent instantiation
       }
