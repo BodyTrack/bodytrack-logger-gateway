@@ -55,7 +55,7 @@ DOWNLOADING THE GATEWAY APPLICATION
 
 The gateway source code is stored in a GitHub code repository at:
 
-   https://github.com/chrisbartley/bodytrack-logger-gateway.
+   https://github.com/BodyTrack/bodytrack-logger-gateway.
 
 To download the gateway source code, you can either download a snapshot of the code, or use Git to fetch a (read-only)
 copy of the repository.  Instructions for each follow.
@@ -85,7 +85,7 @@ the source with Git.  Binaries and instructions for installing Git are available
 To get the code with Git, first open a command prompt and change the current directory to wherever you want the source
 code to live.  Then do the following:
 
-   $ git clone git://github.com/chrisbartley/bodytrack-logger-gateway.git
+   $ git clone git://github.com/BodyTrack/bodytrack-logger-gateway.git
    Cloning into bodytrack-logger-gateway...
    remote: Counting objects: 528, done.
    remote: Compressing objects: 100% (299/299), done.
