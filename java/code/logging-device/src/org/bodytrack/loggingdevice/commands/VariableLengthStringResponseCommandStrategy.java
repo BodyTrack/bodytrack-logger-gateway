@@ -71,7 +71,7 @@ public class VariableLengthStringResponseCommandStrategy extends CreateLabSerial
       if (response != null && response.wasSuccessful())
          {
          final byte[] responseData = response.getData();
-         final int numChars = responseData.length - SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER - 2; // subtract 2 to ignore the CR and LF
+         final int numChars = Math.max(0, responseData.length - SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER - 2); // subtract 2 to ignore the CR and LF, then make sure the result is non-negative
          final char[] chars = new char[numChars];
          for (int i = 0; i < chars.length; i++)
             {
