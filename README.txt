@@ -225,30 +225,34 @@ the path separator character for whatever platform you're running under.  For ex
 Specifying the serial port should greatly decrease the time it takes to establish a connection with the device.
 
 
-More Detailed Logging
----------------------
+Command Line Options
+--------------------
 
-By default, the gateway application uses a logging level of "Debug".  Sometimes it's helpful to drop to the lowest 
-level ("Trace") in order to track down problems with serial communication, carefully track the flow of program 
-execution, etc.  To change the logging level, do the following:
+The gateway application supports the following command line options:
 
-1) Open the /bodytrack-logger-gateway/java/code/applications/src/log4j.xml file in your favorite text editor.
-2) Find this block at the bottom of the XML file:
+   --no-upload               Files will not be uploaded
+   --logging-level=<level>   Sets the logging level for the log file.  Has no effect on the
+                             console logging.  Valid values are 'trace', 'debug', and 'info'.
+   --config=<path>           Specify a path to a local config file.  No connection to a device
+                             will be attempted (and thus no files will be downloaded).  Instead,
+                             the gateway will obtain upload server/port, user info, and device
+                             info from this config file.  The gateway will process all BodyTrack
+                             data files in the data file directory denoted by the upload server/port,
+                             user info, and device found in the config file.
+   --help                    Displays a help message detailing these command line options.
 
-      <root>
-         <priority value="debug"/>
-         <appender-ref ref="ConsoleAppender"/>
-         <appender-ref ref="RollingFileAppender"/>
-      </root>
-      Change the word "debug" to "trace", like this:
-      <root>
-         <priority value="trace"/>
-         <appender-ref ref="ConsoleAppender"/>
-         <appender-ref ref="RollingFileAppender"/>
-      </root>
 
-3) Save the file and close it.
-4) Now open a command prompt and rebuild the binaries (see the "Building the Gateway Application" section above).  Now 
-   when you run the application you should see much more detailed logging information.
+Change the Logging Level
+------------------------
+
+You can set the logging level when you run the gateway by specifying the "--logging-level" command line option as
+discussed above.  You can also change the logging level at runtime by using the "l" menu option.
+
+
+View Statistics
+---------------
+
+Statistics for the number of files downloaded, uploaded, and deleted are now printed periodically by the gateway.  You
+can also request the statistics at any time by choosing the "s" command.
 
 =======================================================================================================================

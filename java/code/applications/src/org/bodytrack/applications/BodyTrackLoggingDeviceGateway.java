@@ -66,15 +66,18 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
       if (arguments.containsKey(HELP_COMMAND_LINE_SWITCH))
          {
          final StringBuilder s = new StringBuilder("Options:").append(LINE_SEPARATOR);
-         s.append("   ").append(NO_UPLOAD_COMMAND_LINE_SWITCH).append("           ").append("Files will not be uploaded").append(LINE_SEPARATOR);
-         s.append("   ").append(CONFIG_COMMAND_LINE_SWITCH).append("=<path>").append("       ")
+         s.append("   ").append(NO_UPLOAD_COMMAND_LINE_SWITCH).append("               ").append("Files will not be uploaded").append(LINE_SEPARATOR);
+         s.append("   ").append(LOGGING_LEVEL_COMMAND_LINE_SWITCH).append("=<level>")
+               .append("   Sets the logging level for the log file.  Has no effect on the").append(LINE_SEPARATOR)
+               .append("                             console logging.  Valid values are 'trace', 'debug', and 'info'.").append(LINE_SEPARATOR);
+         s.append("   ").append(CONFIG_COMMAND_LINE_SWITCH).append("=<path>").append("           ")
                .append("Specify a path to a local config file.  No connection to a device").append(LINE_SEPARATOR)
-               .append("                         will be attempted (and thus no files will be downloaded).  Instead,").append(LINE_SEPARATOR)
-               .append("                         the gateway will obtain upload server/port, user info, and device").append(LINE_SEPARATOR)
-               .append("                         info from this config file.  The gateway will process all BodyTrack").append(LINE_SEPARATOR)
-               .append("                         data files in the data file directory denoted by the upload server/port,").append(LINE_SEPARATOR)
-               .append("                         user info, and device found in the config file.").append(LINE_SEPARATOR);
-         s.append("   ").append(HELP_COMMAND_LINE_SWITCH).append("                ").append("Displays this help message").append(LINE_SEPARATOR);
+               .append("                             will be attempted (and thus no files will be downloaded).  Instead,").append(LINE_SEPARATOR)
+               .append("                             the gateway will obtain upload server/port, user info, and device").append(LINE_SEPARATOR)
+               .append("                             info from this config file.  The gateway will process all BodyTrack").append(LINE_SEPARATOR)
+               .append("                             data files in the data file directory denoted by the upload server/port,").append(LINE_SEPARATOR)
+               .append("                             user info, and device found in the config file.").append(LINE_SEPARATOR);
+         s.append("   ").append(HELP_COMMAND_LINE_SWITCH).append("                    ").append("Displays this help message").append(LINE_SEPARATOR);
          println(s);
          }
       else
