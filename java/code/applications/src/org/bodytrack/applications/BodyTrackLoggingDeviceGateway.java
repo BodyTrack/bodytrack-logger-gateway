@@ -11,6 +11,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import edu.cmu.ri.createlab.device.CreateLabDevicePingFailureEventListener;
 import edu.cmu.ri.createlab.serial.commandline.SerialDeviceCommandLineApplication;
+import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.bodytrack.loggingdevice.DataFile;
 import org.bodytrack.loggingdevice.DataFileDownloader;
@@ -37,6 +39,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
    private static final String HELP_COMMAND_LINE_SWITCH = "--help";
    private static final String NO_UPLOAD_COMMAND_LINE_SWITCH = "--no-upload";
    private static final String CONFIG_COMMAND_LINE_SWITCH = "--config";
+   private static final String LOGGING_LEVEL_COMMAND_LINE_SWITCH = "--logging-level";
    private static final String LINE_SEPARATOR = System.getProperty("line.separator", "\n");
 
    public static void main(final String[] args)
@@ -76,7 +79,34 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
          }
       else
          {
+         Level loggingLevel = LogManager.getRootLogger().getLevel();
+         if (arguments.containsKey(LOGGING_LEVEL_COMMAND_LINE_SWITCH))
+            {
+            String desiredLoggingLevel = arguments.get(LOGGING_LEVEL_COMMAND_LINE_SWITCH);
+            if (desiredLoggingLevel != null)
+               {
+               desiredLoggingLevel = desiredLoggingLevel.toLowerCase();
+               }
+            if ("trace".equals(desiredLoggingLevel))
+               {
+               loggingLevel = Level.TRACE;
+               }
+            else if ("debug".equals(desiredLoggingLevel))
+               {
+               loggingLevel = Level.DEBUG;
+               }
+            else if ("info".equals(desiredLoggingLevel))
+               {
+               loggingLevel = Level.INFO;
+               }
+            }
+         LogManager.getRootLogger().setLevel(loggingLevel);
+         final String message = "Log file logging level is '" + loggingLevel + "'";
+         LOG.info(message);
+         CONSOLE_LOG.info(message);
+
          arguments.remove(HELP_COMMAND_LINE_SWITCH);
+         arguments.remove(LOGGING_LEVEL_COMMAND_LINE_SWITCH);
          new BodyTrackLoggingDeviceGateway(arguments).run();
          }
       }
@@ -258,6 +288,49 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
             }
          };
 
+   private final Runnable setLoggingLevelAction =
+         new Runnable()
+         {
+         public void run()
+            {
+            println("Choose the logging level for the log file:");
+            println("   1: TRACE");
+            println("   2: DEBUG (default)");
+            println("   3: INFO");
+            final Integer loggingLevelChoice = readInteger("Logging level (1-3): ");
+            final Level chosenLevel;
+            switch (loggingLevelChoice)
+               {
+               case (1):
+                  chosenLevel = Level.TRACE;
+                  break;
+
+               case (2):
+                  chosenLevel = Level.DEBUG;
+                  break;
+
+               case (3):
+                  chosenLevel = Level.INFO;
+                  break;
+
+               default:
+                  chosenLevel = null;
+               }
+
+            if (chosenLevel == null)
+               {
+               println("Invalid choice.");
+               }
+            else
+               {
+               LogManager.getRootLogger().setLevel(chosenLevel);
+               final String message = "Logging level now set to '" + chosenLevel + "'.";
+               LOG.info(message);
+               println(message);
+               }
+            }
+         };
+
    private final Runnable disconnectFromDeviceAction =
          new Runnable()
          {
@@ -282,6 +355,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
       {
       registerAction("c", scanAndConnectToDeviceAction);
       registerAction("s", printStatisticsAction);
+      registerAction("l", setLoggingLevelAction);
       registerAction("d", disconnectFromDeviceAction);
 
       registerAction(QUIT_COMMAND, quitAction);
@@ -300,6 +374,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
       println("");
       println("c         Scan all serial ports and connect to the first device found");
       println("s         Print statistics for files downloaded, uploaded, and deleted");
+      println("l         Set the logging level for the log file (has no effect on console logging)");
       println("d         Disconnect from the device");
       println("");
       println("q         Quit");
