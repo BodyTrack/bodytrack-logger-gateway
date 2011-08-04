@@ -144,13 +144,19 @@ public final class DataFileManager implements DataFileUploader.EventListener, Da
 
                if (filesReadyForUpload != null && filesReadyForUpload.length > 0)
                   {
-                  final String msg = "Found " + filesReadyForUpload.length + " local file(s) to upload";
+                  final String msg = "Found " + filesReadyForUpload.length + " local file(s) to upload.";
                   LOG.info("DataFileManager.startup(): " + msg);
                   CONSOLE_LOG.info(msg);
                   for (final File file : filesReadyForUpload)
                      {
                      submitUploadFileTask(file);
                      }
+                  }
+               else
+                  {
+                  final String msg = "No local file(s) found which need to be uploaded.";
+                  LOG.info("DataFileManager.startup(): " + msg);
+                  CONSOLE_LOG.info(msg);
                   }
                }
 
@@ -651,6 +657,7 @@ public final class DataFileManager implements DataFileUploader.EventListener, Da
          lock.unlock();
          }
       }
+
    /**
     * Changes the file extension on the given <code>file</code> from the <code>existingFilenameExtension</code> to
     * the <code>newFilenameExtension</code>.  Returns the new {@link File} upon success, <code>null</code> on failure.
