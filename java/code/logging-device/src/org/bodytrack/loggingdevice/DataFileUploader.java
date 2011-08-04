@@ -35,6 +35,7 @@ import org.jetbrains.annotations.Nullable;
 public final class DataFileUploader
    {
    private static final Logger LOG = Logger.getLogger(DataFileUploader.class);
+   private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
    private static final int MAX_NUM_UPLOAD_THREADS = 4;
 
@@ -56,9 +57,11 @@ public final class DataFileUploader
       // build the upload URL prefix
       uploadUrlPrefix = "http://" + serverConfig.getServerName() + ":" + serverConfig.getServerPort() + "/users/" + loggingDeviceConfig.getUsername() + "/binupload?dev_nickname=" + loggingDeviceConfig.getDeviceNickname();
 
-      if (LOG.isDebugEnabled())
+      if (LOG.isInfoEnabled())
          {
-         LOG.debug("DataFileUploader.DataFileUploader(): URL prefix for uploading: [" + uploadUrlPrefix + "]");
+         final String msg = "URL prefix for uploading: [" + uploadUrlPrefix + "]";
+         LOG.info("DataFileUploader.DataFileUploader(): " + msg);
+         CONSOLE_LOG.info(msg);
          }
       }
 
@@ -116,6 +119,10 @@ public final class DataFileUploader
             if (LOG.isDebugEnabled())
                {
                LOG.debug("DataFileUploader$UploadFileTask.run(): uploading file [" + fileToUpload + "] to [" + httpPost.getURI() + "]...");
+               }
+            if (LOG.isInfoEnabled())
+               {
+               CONSOLE_LOG.info("Uploading file " + originalFilename + " to server...");
                }
             final HttpResponse response = httpClient.execute(httpPost);
             final HttpEntity responseEntity = response.getEntity();

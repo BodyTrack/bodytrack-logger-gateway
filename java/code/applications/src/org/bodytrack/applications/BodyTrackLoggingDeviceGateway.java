@@ -2,6 +2,8 @@ package org.bodytrack.applications;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
 import edu.cmu.ri.createlab.device.CreateLabDevicePingFailureEventListener;
 import edu.cmu.ri.createlab.serial.commandline.SerialDeviceCommandLineApplication;
 import org.apache.log4j.Logger;
@@ -20,13 +22,48 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
    {
    private static final Logger LOG = Logger.getLogger(BodyTrackLoggingDeviceGateway.class);
 
+   private static final String HELP_COMMAND_LINE_SWITCH = "--help";
+   private static final String NO_UPLOAD_COMMAND_LINE_SWITCH = "--no-upload";
+   private static final String LINE_SEPARATOR = System.getProperty("line.separator", "\n");
+
    public static void main(final String[] args)
       {
-      new BodyTrackLoggingDeviceGateway().run();
+      final Map<String, String> arguments = new HashMap<String, String>(args.length);
+      for (final String arg : args)
+         {
+         final int equalsPosition = arg.indexOf('=');
+         final String key;
+         final String val;
+         if (equalsPosition < 0)
+            {
+            key = arg;
+            val = "";
+            }
+         else
+            {
+            key = arg.substring(0, equalsPosition);
+            val = arg.substring(equalsPosition + 1);
+            }
+         arguments.put(key, val);
+         }
+
+      if (arguments.containsKey(HELP_COMMAND_LINE_SWITCH))
+         {
+         final StringBuilder s = new StringBuilder("Options:").append(LINE_SEPARATOR);
+         s.append("   ").append(NO_UPLOAD_COMMAND_LINE_SWITCH).append("           ").append("Files will not be uploaded").append(LINE_SEPARATOR);
+         s.append("   ").append(HELP_COMMAND_LINE_SWITCH).append("                ").append("Displays this help message").append(LINE_SEPARATOR);
+         println(s);
+         }
+      else
+         {
+         arguments.remove(HELP_COMMAND_LINE_SWITCH);
+         new BodyTrackLoggingDeviceGateway(arguments).run();
+         }
       }
 
    private LoggingDevice device;
    private DataFileManager dataFileManager;
+   private final Map<String, String> arguments;
 
    private final CreateLabDevicePingFailureEventListener pingFailureEventListener =
          new CreateLabDevicePingFailureEventListener()
@@ -45,9 +82,10 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
             }
          };
 
-   private BodyTrackLoggingDeviceGateway()
+   private BodyTrackLoggingDeviceGateway(final Map<String, String> arguments)
       {
       super(new BufferedReader(new InputStreamReader(System.in)));
+      this.arguments = arguments;
 
       registerActions();
       }
@@ -73,24 +111,53 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                else
                   {
                   device.addCreateLabDevicePingFailureEventListener(pingFailureEventListener);
-                  println("Connection successful, starting up the DataFileDownloader and DataFileUploader...");
-
                   final DataStoreServerConfig dataStoreServerConfig = device.getDataStoreServerConfig();
                   final LoggingDeviceConfig loggingDeviceConfig = device.getLoggingDeviceConfig();
 
                   if (dataStoreServerConfig != null && loggingDeviceConfig != null)
                      {
-                     final DataFileUploader dataFileUploader = new DataFileUploader(dataStoreServerConfig, loggingDeviceConfig);
+                     println("Connection successful to device [" + loggingDeviceConfig.getDeviceNickname() + "] for user [" + loggingDeviceConfig.getUsername() + "].");
+                     final boolean isUploadDisabled = arguments.containsKey(NO_UPLOAD_COMMAND_LINE_SWITCH);
+                     if (isUploadDisabled)
+                        {
+                        println("Data files will not be uploaded since you specified the " + NO_UPLOAD_COMMAND_LINE_SWITCH + " option.");
+                        }
+                     else
+                        {
+                        println("Data files will be uploaded to " + dataStoreServerConfig.getServerName() + ":" + dataStoreServerConfig.getServerPort());
+                        }
+
+                     final DataFileUploader dataFileUploader = isUploadDisabled ? null : new DataFileUploader(dataStoreServerConfig, loggingDeviceConfig);
                      final DataFileDownloader dataFileDownloader = new DataFileDownloader(device);
 
+                     println("Starting up the Gateway...");
                      dataFileManager = new DataFileManager(dataStoreServerConfig,
                                                            loggingDeviceConfig,
                                                            dataFileUploader,
                                                            dataFileDownloader);
-
                      dataFileManager.startup();
                      }
+                  else
+                     {
+                     println("Connection Failed:  Could not obtain the DataStoreServerConfig and/or LoggingDeviceConfig from the device.");
+                     }
                   }
+               }
+            }
+         };
+
+   private final Runnable printStatisticsAction =
+         new Runnable()
+         {
+         public void run()
+            {
+            if (isConnected())
+               {
+               println(dataFileManager.getStatistics());
+               }
+            else
+               {
+               println("You are not connected to a BodyTrack Logging Device.");
                }
             }
          };
@@ -118,6 +185,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
    private void registerActions()
       {
       registerAction("c", scanAndConnectToDeviceAction);
+      registerAction("s", printStatisticsAction);
       registerAction("d", disconnectFromDeviceAction);
 
       registerAction(QUIT_COMMAND, quitAction);
@@ -138,6 +206,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
       println("COMMANDS -----------------------------------");
       println("");
       println("c         Scan all serial ports and connect to the first device found");
+      println("s         Print statistics for files downloaded, uploaded, and deleted");
       println("d         Disconnect from the device");
       println("");
       println("q         Quit");

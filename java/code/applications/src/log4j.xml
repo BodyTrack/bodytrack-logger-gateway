@@ -6,7 +6,7 @@
    <!-- Define appenders -->
    <appender name="ConsoleAppender" class="org.apache.log4j.ConsoleAppender">
       <layout class="org.apache.log4j.PatternLayout">
-         <param name="ConversionPattern" value="%d{HH:mm:ss,SSS} [%t] %-5p: %m%n"/>
+         <param name="ConversionPattern" value="%d %-5p: %m%n"/>
       </layout>
    </appender>
 
@@ -31,12 +31,16 @@
    -->
 
    <category name="org.apache.http">
-      <priority value="info"/>
+      <level value="info"/>
    </category>
 
-   <root>
-      <priority value="debug"/>
+   <logger name="ConsoleLog" additivity="false">
+      <level value="info"/>
       <appender-ref ref="ConsoleAppender"/>
+   </logger>
+
+   <root>
+      <level value="debug"/>
       <appender-ref ref="RollingFileAppender"/>
    </root>
 

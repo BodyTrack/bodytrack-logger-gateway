@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 public final class DataFileDownloader
    {
    private static final Logger LOG = Logger.getLogger(DataFileDownloader.class);
+   private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
    public static enum FailedDataFileDownloadCause
       {
@@ -117,6 +118,10 @@ public final class DataFileDownloader
                @Override
                public void run()
                   {
+                  if (LOG.isInfoEnabled())
+                     {
+                     CONSOLE_LOG.info("Downloading file " + filename + " from device...");
+                     }
                   FailedDataFileDownloadCause failureCause;
                   try
                      {
@@ -195,6 +200,10 @@ public final class DataFileDownloader
                @Override
                public void run()
                   {
+                  if (LOG.isInfoEnabled())
+                     {
+                     CONSOLE_LOG.info("Deleting file " + filename + " from device...");
+                     }
                   final boolean wasDeleteSuccessful = device.deleteFile(filename);
 
                   if (wasDeleteSuccessful)
