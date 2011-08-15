@@ -668,7 +668,8 @@ public final class DataFileManager implements DataFileUploader.EventListener, Da
       lock.lock();  // block until condition holds
       try
          {
-         final int extensionPosition = file.getName().indexOf(existingFilenameExtension);
+         // use .toLowerCase() here so we don't have to worry about case (e.g. the .BT files might be .bt if copied manually from the SD card)
+         final int extensionPosition = file.getName().toLowerCase().indexOf(existingFilenameExtension.toLowerCase());
          if (extensionPosition >= 0)
             {
             final String filenameWithoutOldExtension = file.getName().substring(0, extensionPosition);
