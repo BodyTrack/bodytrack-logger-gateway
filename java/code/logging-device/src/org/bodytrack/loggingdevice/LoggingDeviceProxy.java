@@ -43,6 +43,7 @@ import org.jetbrains.annotations.Nullable;
 class LoggingDeviceProxy implements LoggingDevice
    {
    private static final Logger LOG = Logger.getLogger(LoggingDeviceProxy.class);
+   private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
    public static final String APPLICATION_NAME = "LoggingDeviceProxy";
    private static final int DELAY_IN_SECONDS_BETWEEN_PINGS = 2;
@@ -163,43 +164,119 @@ class LoggingDeviceProxy implements LoggingDevice
 
       // we cache all the config values since the chances of the user reconfiguring the device while the program is
       // running is low and isn't supported by the devices anyway
-      final String username = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('U'));
-      final String deviceNickname = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('N'));
-      final String serverName = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('V'));
-      final String serverPort = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('O'));
-      final String wirelessSsid = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('S'));
-      final WirelessAuthorizationType wirelessAuthorizationType = WirelessAuthorizationType.findById(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('A')));
-      final String wirelessAuthorizationKey = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('K'));
+      loggingDeviceConfig =
+            new RetryingActionExecutor<LoggingDeviceConfig>()
+            {
+            @Override
+            @Nullable
+            protected LoggingDeviceConfig executionWorkhorse()
+               {
+               final String msg = "Reading username and device nickname from device...";
+               CONSOLE_LOG.info(msg);
+               if (LOG.isInfoEnabled())
+                  {
+                  LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
+                  }
+               final String username = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('U'));
+               final String deviceNickname = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('N'));
 
-      // now create the various configurations, which cache the config details
-      if (username != null && deviceNickname != null)
+               if (isNonNullAndNonEmpty(username) && isNonNullAndNonEmpty(deviceNickname))
+                  {
+                  return new LoggingDeviceConfigImpl(username, deviceNickname);
+                  }
+
+               LOG.error("LoggingDeviceProxy.executionWorkhorse(): failed to retrieve username [" + username + "] and/or deviceNickname [" + deviceNickname + "].  Returning null LoggingDeviceConfig.");
+               return null;
+               }
+            }.execute();
+
+      if (loggingDeviceConfig == null)
          {
-         loggingDeviceConfig = new LoggingDeviceConfigImpl(username, deviceNickname);
+         final String message = "Failed to read username and device nickname from device!";
+         LOG.error(message);
+         CONSOLE_LOG.error(message);
          }
       else
          {
-         LOG.error("LoggingDeviceProxy.LoggingDeviceProxy(): failed to retrieve username [" + username + "] and/or deviceNickname [" + deviceNickname + "].  Setting loggingDeviceConfig to null.");
-         loggingDeviceConfig = null;
+         final String message = "Successfully read username and device nickname from device.";
+         LOG.info(message);
+         CONSOLE_LOG.info(message);
          }
 
-      if (serverName != null && serverPort != null)
+      dataStoreServerConfig =
+            new RetryingActionExecutor<DataStoreServerConfig>()
+            {
+            @Override
+            @Nullable
+            protected DataStoreServerConfig executionWorkhorse()
+               {
+               final String msg = "Reading server name and port from device...";
+               CONSOLE_LOG.info(msg);
+               if (LOG.isInfoEnabled())
+                  {
+                  LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
+                  }
+               final String serverName = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('V'));
+               final String serverPort = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('O'));
+
+               if (isNonNullAndNonEmpty(serverName) && isNonNullAndNonEmpty(serverPort))
+                  {
+                  return new DataStoreServerConfigImpl(serverName, serverPort);
+                  }
+               LOG.error("LoggingDeviceProxy.executionWorkhorse(): failed to retrieve serverName [" + serverName + "] and/or serverPort [" + serverPort + "].  Returning null DataStoreServerConfig.");
+               return null;
+               }
+            }.execute();
+
+      if (dataStoreServerConfig == null)
          {
-         dataStoreServerConfig = new DataStoreServerConfigImpl(serverName, serverPort);
+         final String message = "Failed to read server name and port from device!";
+         LOG.error(message);
+         CONSOLE_LOG.error(message);
          }
       else
          {
-         LOG.error("LoggingDeviceProxy.LoggingDeviceProxy(): failed to retrieve serverName [" + serverName + "] and/or serverPort [" + serverPort + "].  Setting dataStoreServerConfig to null.");
-         dataStoreServerConfig = null;
+         final String message = "Successfully read server name and port from device.";
+         LOG.info(message);
+         CONSOLE_LOG.info(message);
          }
 
-      if (wirelessSsid != null && wirelessAuthorizationType != null && wirelessAuthorizationKey != null)
+      dataStoreConnectionConfig =
+            new RetryingActionExecutor<DataStoreConnectionConfig>()
+            {
+            @Override
+            protected DataStoreConnectionConfig executionWorkhorse()
+               {
+               final String msg = "Reading wifi config from device...";
+               CONSOLE_LOG.info(msg);
+               if (LOG.isInfoEnabled())
+                  {
+                  LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
+                  }
+               final String wirelessSsid = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('S'));
+               final WirelessAuthorizationType wirelessAuthorizationType = WirelessAuthorizationType.findById(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('A')));
+               final String wirelessAuthorizationKey = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('K'));
+
+               if (isNonNullAndNonEmpty(wirelessSsid) && wirelessAuthorizationType != null && isNonNullAndNonEmpty(wirelessAuthorizationKey))
+                  {
+                  return new DataStoreConnectionConfigImpl(wirelessSsid, wirelessAuthorizationType, wirelessAuthorizationKey);
+                  }
+               LOG.error("LoggingDeviceProxy.executionWorkhorse(): failed to retrieve wirelessSsid [" + wirelessSsid + "], wirelessAuthorizationType [" + wirelessAuthorizationType + "], and/or wirelessAuthorizationKey [" + wirelessAuthorizationKey + "].  Returning null DataStoreServerConfig.");
+               return null;
+               }
+            }.execute();
+
+      if (dataStoreConnectionConfig == null)
          {
-         dataStoreConnectionConfig = new DataStoreConnectionConfigImpl(wirelessSsid, wirelessAuthorizationType, wirelessAuthorizationKey);
+         final String message = "Failed to read wifi config from device!";
+         LOG.error(message);
+         CONSOLE_LOG.error(message);
          }
       else
          {
-         LOG.error("LoggingDeviceProxy.LoggingDeviceProxy(): failed to retrieve wirelessSsid [" + wirelessSsid + "], wirelessAuthorizationType [" + wirelessAuthorizationType + "], and/or wirelessAuthorizationKey [" + wirelessAuthorizationKey + "].  Setting dataStoreConnectionConfig to null.");
-         dataStoreConnectionConfig = null;
+         final String message = "Successfully read wifi config from device.";
+         LOG.info(message);
+         CONSOLE_LOG.info(message);
          }
 
       // schedule periodic pings
@@ -207,6 +284,11 @@ class LoggingDeviceProxy implements LoggingDevice
                                                                     DELAY_IN_SECONDS_BETWEEN_PINGS, // delay before first ping
                                                                     DELAY_IN_SECONDS_BETWEEN_PINGS, // delay between pings
                                                                     TimeUnit.SECONDS);
+      }
+
+   private boolean isNonNullAndNonEmpty(@Nullable final String s)
+      {
+      return s != null && s.length() > 0;
       }
 
    public String getPortName()
@@ -386,6 +468,55 @@ class LoggingDeviceProxy implements LoggingDevice
          {
          LOG.error("LoggingDeviceProxy.disconnect(): Exception while trying to shut down the SerialDeviceCommandExecutionQueue", e);
          }
+      }
+
+   private abstract static class RetryingActionExecutor<ReturnType>
+      {
+      private static final int MAX_RETRIES = 3;
+
+      /**
+       * Executes an action and returns the result, retrying if necessary up to three times.  Returns <code>null</code>
+       * only if it fails to get a non-<code>null</code> result.
+       */
+      @SuppressWarnings({"BusyWait"})
+      @Nullable
+      protected final ReturnType execute()
+         {
+         int retryCount = 0;
+         do
+            {
+            try
+               {
+               final ReturnType val = executionWorkhorse();
+               if (val != null)
+                  {
+                  return val;
+                  }
+               }
+            catch (Exception e)
+               {
+               LOG.error("Exception while executing the action", e);
+               }
+            retryCount++;
+            if (retryCount < MAX_RETRIES)
+               {
+               try
+                  {
+                  Thread.sleep(200);
+                  }
+               catch (InterruptedException e)
+                  {
+                  LOG.error("InterruptedException while sleeping", e);
+                  }
+               }
+            }
+         while (retryCount < MAX_RETRIES);
+
+         return null;
+         }
+
+      @Nullable
+      protected abstract ReturnType executionWorkhorse();
       }
 
    private static class LoggingDeviceConfigImpl implements LoggingDeviceConfig

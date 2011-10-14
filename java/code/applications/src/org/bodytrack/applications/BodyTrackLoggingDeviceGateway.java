@@ -209,6 +209,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                         final String msg = "You have disabled both download and upload.  There's nothing for me to do, so I'm quitting.";
                         LOG.info(msg);
                         CONSOLE_LOG.info(msg);
+                        device.disconnect();
                         System.exit(0);
                         }
                      else
@@ -223,7 +224,11 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                      }
                   else
                      {
-                     CONSOLE_LOG.error("Connection Failed:  Could not obtain the DataStoreServerConfig and/or LoggingDeviceConfig from the device.");
+                     final String message = "Connection Failed:  Could not obtain the DataStoreServerConfig and/or LoggingDeviceConfig from the device.  The Gateway will now shutdown.";
+                     LOG.error(message);
+                     CONSOLE_LOG.error(message);
+                     device.disconnect();
+                     System.exit(1);
                      }
                   }
                }
