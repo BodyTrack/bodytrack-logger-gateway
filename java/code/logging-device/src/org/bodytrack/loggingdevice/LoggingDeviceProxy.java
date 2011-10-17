@@ -159,8 +159,30 @@ class LoggingDeviceProxy implements LoggingDevice
       stringReturnValueCommandExecutor = new SerialDeviceReturnValueCommandExecutor<String>(commandQueue, commandExecutionFailureHandler);
       final SerialDeviceNoReturnValueCommandExecutor noReturnValueCommandExecutor = new SerialDeviceNoReturnValueCommandExecutor(commandQueue, commandExecutionFailureHandler);
 
-      // before doing anything else, we need to tell the device the current time
-      noReturnValueCommandExecutor.execute(setCurrentTimeCommandStrategy);
+      // before doing anything else, we need to tell the device the current time--keep retrying until successful
+      boolean wasSetTimeSuccessful;
+      int numAttemptsToSetTime = 0;
+      do
+         {
+         wasSetTimeSuccessful = noReturnValueCommandExecutor.execute(setCurrentTimeCommandStrategy);
+         numAttemptsToSetTime++;
+         if (!wasSetTimeSuccessful)
+            {
+            final String message = "Failed to set the time on the device (" + numAttemptsToSetTime + " failed attempt(s))";
+            LOG.error(message);
+            CONSOLE_LOG.error(message);
+            try
+               {
+               //noinspection BusyWait
+               Thread.sleep(500);
+               }
+            catch (InterruptedException e)
+               {
+               LOG.error("InterruptedException while sleeping", e);
+               }
+            }
+         }
+      while (!wasSetTimeSuccessful);
 
       // we cache all the config values since the chances of the user reconfiguring the device while the program is
       // running is low and isn't supported by the devices anyway
