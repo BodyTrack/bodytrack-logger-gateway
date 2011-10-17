@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
@@ -21,6 +22,7 @@ import org.jetbrains.annotations.Nullable;
 public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableLengthReturnValueCommandStrategy<DataFile>
    {
    private static final Logger LOG = Logger.getLogger(GetFileCommandStrategy.class);
+   private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
    public static final int READ_TIMEOUT = 15;
    public static final TimeUnit READ_TIMEOUT_UNITS = TimeUnit.MINUTES;
@@ -33,6 +35,9 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
 
    /** The size of the checksum, in bytes */
    private static final int SIZE_IN_BYTES_OF_CHECKSUM = 4;
+
+   // Dates earlier than 2011 are probably bogus
+   private static final Date EARLIEST_VALID_DATE = new GregorianCalendar(2011, 0, 1, 0, 0, 0).getTime();
 
    private final byte[] command;
    private final String filename;
@@ -119,6 +124,14 @@ public final class GetFileCommandStrategy extends CreateLabSerialDeviceVariableL
             try
                {
                final DataFileImpl dataFile = new DataFileImpl(filename, responseData, SIZE_IN_BYTES_OF_EXPECTED_RESPONSE_HEADER, lengthOfFileAndChecksum);
+
+               // warn the user if the date appears to be bogus
+               if (dataFile.getTimestamp().compareTo(EARLIEST_VALID_DATE) < 0)
+                  {
+                  final String message = "WARNING: Data file [" + dataFile.getFilename() + "] may have an invalid timestamp [" + dataFile.getTimestamp() + "].";
+                  LOG.warn("GetFileCommandStrategy.convertResponse(): " + message);
+                  CONSOLE_LOG.warn(message);
+                  }
 
                if (LOG.isDebugEnabled())
                   {

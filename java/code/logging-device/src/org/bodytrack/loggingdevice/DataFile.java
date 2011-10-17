@@ -15,7 +15,7 @@ public interface DataFile
    /** The standard <code>DataFile</code> extension */
    String FILENAME_EXTENSION = ".BT";
 
-   Pattern FILENAME_PATTERN = Pattern.compile("[A-F0-9]{8}\\.BT");
+   Pattern FILENAME_PATTERN = Pattern.compile("[A-F0-9]+\\.BT");
 
    /**
     * Returns <code>true</code> if the file is empty, <code>false</code> otherwise.  An empty file is used to signify
