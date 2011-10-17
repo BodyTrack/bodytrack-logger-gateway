@@ -877,6 +877,7 @@ public final class DataFileManager implements DataFileUploader.EventListener, Da
          }
       }
 
+   @NotNull
    private String computeBaseFilename(@NotNull final String filename)
       {
       // get the base filename
@@ -925,7 +926,7 @@ public final class DataFileManager implements DataFileUploader.EventListener, Da
                @Override
                public boolean accept(final File file, final String filename)
                   {
-                  return file != null && filename != null && filename.toUpperCase().startsWith(baseFilenameUppercase);
+                  return file != null && baseFilenameUppercase.equals(computeBaseFilename(filename).toUpperCase());
                   }
                });
          }
