@@ -147,6 +147,9 @@
 
    <target name="dist-bodytrack-applications" depends="dist-bodytrack-logging-device, build-bodytrack-applications" description="builds bodytrack-applications" unless="dist-bodytrack-applications-is-complete">
       <create-dist component.name="bodytrack-applications">
+         <jar-manifest-attributes>
+            <attribute name="Main-Class" value="org.bodytrack.applications.BodyTrackLoggingDeviceGateway"/>
+         </jar-manifest-attributes>
          <additional-files-to-copy>
             <fileset file="${bodytrack-logging-device.dist.dir}/${bodytrack-logging-device.jar.filename}"/>
             <fileset file="${commons-io.jar}"/>
