@@ -30,9 +30,6 @@ status of the file.  The current set of possible extensions is:
    .BTX       - The gateway tried to upload the file to the server, but the server responded that the file has errors
                 and/or failed bin recs.
 
-The gateway application is not yet distributed in binary form, so you'll need to download the source from GitHub and
-build it on your machine.  Please see the instructions below.
-
 =======================================================================================================================
 
 PREREQUISITES
@@ -57,8 +54,22 @@ The gateway source code is stored in a GitHub code repository at:
 
    https://github.com/BodyTrack/bodytrack-logger-gateway.
 
-To download the gateway source code, you can either download a snapshot of the code, or use Git to fetch a (read-only)
-copy of the repository.  Instructions for each follow.
+To download the gateway, you can either download pre-built binaries, download a snapshot of the source code, or use Git
+to fetch a (read-only) copy of the repository.  Instructions for each follow.
+
+
+Download Pre-Built Binaries
+---------------------------
+
+If you don't care about easily updating to new versions of the gateway and/or you don't have (or want) Git and Ant
+installed, then you may find it easiest to just download pre-built binaries from GitHub.  To do so, simply go to the
+Downloads page for the repository and find the version you want to use (typically you'll want the most recent).
+
+After the file finishes downloading, unzip it to your favorite location.  Then open a command prompt and change the
+current directory to the gateway application directory you just unzipped.  Finally, to run the gateway, enter the
+following:
+
+   $ java -jar bodytrack-applications.jar
 
 
 Download a Snapshot of the Source Code
