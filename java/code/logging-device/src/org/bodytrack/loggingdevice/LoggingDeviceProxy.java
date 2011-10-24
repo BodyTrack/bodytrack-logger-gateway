@@ -199,8 +199,8 @@ class LoggingDeviceProxy implements LoggingDevice
                   {
                   LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
                   }
-               final String username = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('U'));
-               final String deviceNickname = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('N'));
+               final String username = trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('U')));
+               final String deviceNickname = trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('N')));
 
                if (isNonNullAndNonEmpty(username) && isNonNullAndNonEmpty(deviceNickname))
                   {
@@ -238,8 +238,8 @@ class LoggingDeviceProxy implements LoggingDevice
                   {
                   LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
                   }
-               final String serverName = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('V'));
-               final String serverPort = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('O'));
+               final String serverName = trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('V')));
+               final String serverPort = trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('O')));
 
                if (isNonNullAndNonEmpty(serverName) && isNonNullAndNonEmpty(serverPort))
                   {
@@ -275,15 +275,15 @@ class LoggingDeviceProxy implements LoggingDevice
                   {
                   LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
                   }
-               final String wirelessSsid = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('S'));
-               final WirelessAuthorizationType wirelessAuthorizationType = WirelessAuthorizationType.findById(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('A')));
-               final String wirelessAuthorizationKey = stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('K'));
+               final String wirelessSsid = trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('S')));
+               final WirelessAuthorizationType wirelessAuthorizationType = WirelessAuthorizationType.findById(trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('A'))));
+               final String wirelessAuthorizationKey = trim(stringReturnValueCommandExecutor.execute(new VariableLengthStringResponseCommandStrategy('K')));
 
                if (isNonNullAndNonEmpty(wirelessSsid) && wirelessAuthorizationType != null && isNonNullAndNonEmpty(wirelessAuthorizationKey))
                   {
                   return new DataStoreConnectionConfigImpl(wirelessSsid, wirelessAuthorizationType, wirelessAuthorizationKey);
                   }
-               LOG.error("LoggingDeviceProxy.executionWorkhorse(): failed to retrieve wirelessSsid [" + wirelessSsid + "], wirelessAuthorizationType [" + wirelessAuthorizationType + "], and/or wirelessAuthorizationKey [" + wirelessAuthorizationKey + "].  Returning null DataStoreServerConfig.");
+               LOG.error("LoggingDeviceProxy.executionWorkhorse(): failed to retrieve wirelessSsid [" + wirelessSsid + "], wirelessAuthorizationType [" + wirelessAuthorizationType + "], and/or wirelessAuthorizationKey [" + wirelessAuthorizationKey + "].  Returning null DataStoreConnectionConfig.");
                return null;
                }
             }.execute();
@@ -306,6 +306,17 @@ class LoggingDeviceProxy implements LoggingDevice
                                                                     DELAY_IN_SECONDS_BETWEEN_PINGS, // delay before first ping
                                                                     DELAY_IN_SECONDS_BETWEEN_PINGS, // delay between pings
                                                                     TimeUnit.SECONDS);
+      }
+
+   /** Trims the given String and returns it.  Returns <code>null</code> if the given String is <code>null</code>. */
+   @Nullable
+   private String trim(@Nullable final String s)
+      {
+      if (s != null)
+         {
+         return s.trim();
+         }
+      return null;
       }
 
    private boolean isNonNullAndNonEmpty(@Nullable final String s)
