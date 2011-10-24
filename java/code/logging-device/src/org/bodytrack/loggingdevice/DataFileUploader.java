@@ -145,7 +145,15 @@ public final class DataFileUploader
                   String json = null;
                   try
                      {
-                     json = responseStr.substring(responseStr.indexOf("{"));
+                     final int openBracePosition = responseStr.indexOf("{");
+                     if (openBracePosition >= 0)
+                        {
+                        json = responseStr.substring(openBracePosition);
+                        }
+                     else
+                        {
+                        LOG.error("DataFileUploader$UploadFileTask.run(): Error while parsing the JSON response: open brace not found");
+                        }
                      }
                   catch (Exception e)
                      {
@@ -172,6 +180,10 @@ public final class DataFileUploader
                   {
                   LOG.error("DataFileUploader$UploadFileTask.run(): IllegalStateException while reading the response", e);
                   }
+               catch (Exception e)
+                  {
+                  LOG.error("DataFileUploader$UploadFileTask.run(): Exception while reading the response", e);
+                  }
                }
             EntityUtils.consume(responseEntity);
             }
@@ -182,6 +194,10 @@ public final class DataFileUploader
          catch (IOException e)
             {
             LOG.error("DataFileUploader$UploadFileTask.run(): IOException while trying to upload data file [" + fileToUpload + "]", e);
+            }
+         catch (Exception e)
+            {
+            LOG.error("DataFileUploader$UploadFileTask.run(): Exception while trying to upload data file [" + fileToUpload + "]", e);
             }
          finally
             {
