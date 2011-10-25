@@ -104,9 +104,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                }
             }
          LogManager.getRootLogger().setLevel(loggingLevel);
-         final String message = "Log file logging level is '" + loggingLevel + "'";
-         LOG.info(message);
-         CONSOLE_LOG.info(message);
+         logInfo("Log file logging level is '" + loggingLevel + "'");
 
          arguments.remove(HELP_COMMAND_LINE_SWITCH);
          arguments.remove(LOGGING_LEVEL_COMMAND_LINE_SWITCH);
@@ -125,12 +123,12 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
             {
             LOG.debug("BodyTrackLoggingDeviceGateway.handlePingFailureEvent(): ping failure detected, cleaning up...");
 
-            CONSOLE_LOG.error("Device ping failure detected.  Cleaning up...");
+            logError("Device ping failure detected.  Cleaning up...");
             disconnect(false);
 
             LOG.debug("BodyTrackLoggingDeviceGateway.handlePingFailureEvent(): ping failure detected, attempting reconnect...");
 
-            CONSOLE_LOG.info("Now attempting to reconnect to the device...");
+            logInfo("Now attempting to reconnect to the device...");
             startup();
             }
          };
@@ -157,18 +155,18 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                final boolean isDownloadDisabled = arguments.containsKey(CONFIG_COMMAND_LINE_SWITCH);
                if (isDownloadDisabled)
                   {
-                  CONSOLE_LOG.info("Loading config file...");
+                  logInfo("Loading config file...");
                   device = createFakeLoggingDevice(arguments.get(CONFIG_COMMAND_LINE_SWITCH));
                   }
                else
                   {
-                  CONSOLE_LOG.info("Scanning for a BodyTrack Logging Device...");
+                  logInfo("Scanning for a BodyTrack Logging Device...");
                   device = LoggingDeviceFactory.create();
                   }
 
                if (device == null)
                   {
-                  CONSOLE_LOG.error("Connection failed.");
+                  logError("Connection failed.");
                   }
                else
                   {
@@ -183,38 +181,36 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                      final DataFileDownloader dataFileDownloader;
                      if (isDownloadDisabled)
                         {
-                        CONSOLE_LOG.info("Data files will not be downloaded from a device since you specified a config file for device [" + loggingDeviceConfig.getDeviceNickname() + "] and user [" + loggingDeviceConfig.getUsername() + "]");
+                        logInfo("Data files will not be downloaded from a device since you specified a config file for device [" + loggingDeviceConfig.getDeviceNickname() + "] and user [" + loggingDeviceConfig.getUsername() + "]");
                         dataFileDownloader = null;
                         }
                      else
                         {
-                        CONSOLE_LOG.info("Connection successful to device [" + loggingDeviceConfig.getDeviceNickname() + "] for user [" + loggingDeviceConfig.getUsername() + "] on serial port [" + device.getPortName() + "].");
+                        logInfo("Connection successful to device [" + loggingDeviceConfig.getDeviceNickname() + "] for user [" + loggingDeviceConfig.getUsername() + "] on serial port [" + device.getPortName() + "].");
                         dataFileDownloader = new DataFileDownloader(device);
                         }
 
                      final DataFileUploader dataFileUploader;
                      if (isUploadDisabled)
                         {
-                        CONSOLE_LOG.info("Data files will not be uploaded since you specified the " + NO_UPLOAD_COMMAND_LINE_SWITCH + " option.");
+                        logInfo("Data files will not be uploaded since you specified the " + NO_UPLOAD_COMMAND_LINE_SWITCH + " option.");
                         dataFileUploader = null;
                         }
                      else
                         {
-                        CONSOLE_LOG.info("Data files will be uploaded to " + dataStoreServerConfig.getServerName() + ":" + dataStoreServerConfig.getServerPort());
+                        logInfo("Data files will be uploaded to " + dataStoreServerConfig.getServerName() + ":" + dataStoreServerConfig.getServerPort());
                         dataFileUploader = new DataFileUploader(dataStoreServerConfig, loggingDeviceConfig);
                         }
 
                      if (dataFileDownloader == null && dataFileUploader == null)
                         {
-                        final String msg = "You have disabled both download and upload.  There's nothing for me to do, so I'm quitting.";
-                        LOG.info(msg);
-                        CONSOLE_LOG.info(msg);
+                        logInfo("You have disabled both download and upload.  There's nothing for me to do, so I'm quitting.");
                         device.disconnect();
                         System.exit(0);
                         }
                      else
                         {
-                        CONSOLE_LOG.info("Starting up the Gateway...");
+                        logInfo("Starting up the Gateway...");
                         dataFileManager = new DataFileManager(dataStoreServerConfig,
                                                               loggingDeviceConfig,
                                                               dataFileUploader,
@@ -224,11 +220,9 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                      }
                   else
                      {
-                     final String message = "Connection Failed:  Could not obtain the DataStoreServerConfig and/or LoggingDeviceConfig from the device.  The Gateway will now shutdown.";
-                     LOG.error(message);
-                     CONSOLE_LOG.error(message);
+                     logError("Connection Failed:  Could not obtain the DataStoreServerConfig and/or LoggingDeviceConfig from the device.  The Gateway will now shutdown.");
                      device.disconnect();
-                     System.exit(1);
+                     System.exit(1); // TODO: fix this!
                      }
                   }
                }
@@ -266,19 +260,29 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                   catch (Exception e)
                      {
                      LOG.error("BodyTrackLoggingDeviceGateway.createFakeLoggingDevice(): Exception while trying to read the config file [" + pathToConfigFile + "]", e);
-                     CONSOLE_LOG.error("Failed to read the config file '" + pathToConfigFile + "'");
+                     logError("Failed to read the config file '" + pathToConfigFile + "'");
                      }
                   }
                else
                   {
-                  final String msg = "The specified config file path '" + pathToConfigFile + "' does not denote a valid config file.";
-                  LOG.error("BodyTrackLoggingDeviceGateway.createFakeLoggingDevice(): " + msg);
-                  CONSOLE_LOG.error(msg);
+                  logError("The specified config file path '" + pathToConfigFile + "' does not denote a valid config file.");
                   }
                }
             return null;
             }
          };
+
+   private static void logInfo(@NotNull final String message)
+      {
+      LOG.info(message);
+      CONSOLE_LOG.info(message);
+      }
+
+   private static void logError(@NotNull final String message)
+      {
+      LOG.error(message);
+      CONSOLE_LOG.error(message);
+      }
 
    private final Runnable printStatisticsAction =
          new Runnable()
@@ -332,9 +336,7 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
             else
                {
                LogManager.getRootLogger().setLevel(chosenLevel);
-               final String message = "Logging level now set to '" + chosenLevel + "'.";
-               LOG.info(message);
-               println(message);
+               logInfo("Logging level now set to '" + chosenLevel + "'.");
                }
             }
          };
