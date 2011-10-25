@@ -3,6 +3,7 @@ package org.bodytrack.loggingdevice;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,8 +20,12 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.entity.FileEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.CoreConnectionPNames;
+import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.annotate.JsonAnySetter;
@@ -38,6 +43,19 @@ public final class DataFileUploader
    private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
    private static final int MAX_NUM_UPLOAD_THREADS = 4;
+
+   /**
+    * Determines the timeout in milliseconds until a connection is established. A timeout value of zero is interpreted
+    * as an infinite timeout.
+    */
+   public static final int HTTP_TIMEOUT_IN_MILLIS = 5 * 60 * 1000; // 5 minutes
+
+   /**
+    * Defines the socket timeout in milliseconds, which is the timeout for waiting for data or, put differently, a
+    * maximum period inactivity between two consecutive data packets). A timeout value of zero is interpreted as an
+    * infinite timeout.
+    */
+   public static final int SOCKET_TIMEOUT_IN_MILLIS = 5 * 60 * 1000; // 5 minutes
 
    public interface EventListener
       {
@@ -108,11 +126,24 @@ public final class DataFileUploader
       @Override
       public void run()
          {
+         // set timeouts
+         final HttpParams httpParams = new BasicHttpParams();
+
+         // This parameter expects a value of type java.lang.Integer. If this parameter is not set, connect operations
+         // will not time out (infinite timeout).
+         httpParams.setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, HTTP_TIMEOUT_IN_MILLIS);
+
+         // This parameter expects a value of type java.lang.Integer. If this parameter is not set, read operations will
+         // not time out (infinite timeout).
+         httpParams.setParameter(CoreConnectionPNames.SO_TIMEOUT, SOCKET_TIMEOUT_IN_MILLIS);
+
+         final HttpClient httpClient = new DefaultHttpClient(httpParams);
+
+         final String uploadUrl = uploadUrlPrefix + "&filename=" + originalFilename;
          DataFileUploadResponse dataFileUploadResponse = null;
-         final HttpClient httpClient = new DefaultHttpClient();
          try
             {
-            final HttpPost httpPost = new HttpPost(uploadUrlPrefix + "&filename=" + originalFilename);
+            final HttpPost httpPost = new HttpPost(uploadUrl);
             final FileEntity entity = new FileEntity(fileToUpload, "application/octet-stream");
             httpPost.setEntity(entity);
 
@@ -190,6 +221,18 @@ public final class DataFileUploader
          catch (ClientProtocolException e)
             {
             LOG.error("DataFileUploader$UploadFileTask.run(): ClientProtocolException while trying to upload data file [" + fileToUpload + "]", e);
+            }
+         catch (ConnectTimeoutException e)
+            {
+            final String message = "Connection timeout while trying to upload data file [" + originalFilename + "] to [" + uploadUrl + "]";
+            LOG.error("DataFileUploader$UploadFileTask.run(): ConnectTimeoutException: " + message + " (reason: " + e.getMessage() + ")");
+            CONSOLE_LOG.error(message);
+            }
+         catch (SocketTimeoutException e)
+            {
+            final String message = "Communication timeout while trying to upload data file [" + originalFilename + "] to [" + uploadUrl + "]";
+            LOG.error("DataFileUploader$UploadFileTask.run(): SocketTimeoutException: " + message + " (reason: " + e.getMessage() + ")");
+            CONSOLE_LOG.error(message);
             }
          catch (IOException e)
             {
