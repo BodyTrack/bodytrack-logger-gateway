@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 class LoggingDeviceConnectivityManager extends BaseCreateLabDeviceConnectivityManager<LoggingDevice>
    {
    private static final Logger LOG = Logger.getLogger(LoggingDeviceConnectivityManager.class);
+   private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
    @Nullable
    @Override
@@ -41,16 +42,19 @@ class LoggingDeviceConnectivityManager extends BaseCreateLabDeviceConnectivityMa
                {
                LOG.debug("LoggingDeviceConnectivityManager.scanForDeviceAndCreateProxy(): checking serial port [" + portName + "]");
                }
+            CONSOLE_LOG.info("Checking serial port [" + portName + "] for logging device...");
 
             final LoggingDevice loggingDevice = LoggingDeviceFactory.create(portName);
 
             if (loggingDevice == null)
                {
                LOG.debug("LoggingDeviceConnectivityManager.scanForDeviceAndCreateProxy(): connection failed, maybe it's not the device we're looking for?");
+               CONSOLE_LOG.info("Failed to connect to device on port [" + portName + "].");
                }
             else
                {
                LOG.debug("LoggingDeviceConnectivityManager.scanForDeviceAndCreateProxy(): connection established, returning LoggingDevice!");
+               CONSOLE_LOG.info("Connection successful to device on port [" + portName + "]!");
                return loggingDevice;
                }
             }
