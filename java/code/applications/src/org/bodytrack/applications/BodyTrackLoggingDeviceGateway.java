@@ -220,9 +220,11 @@ public class BodyTrackLoggingDeviceGateway extends SerialDeviceCommandLineApplic
                      }
                   else
                      {
+                     // this shouldn't ever happen since the LoggingDeviceProxy constructor will throw a
+                     // InitializationException if the DataStoreServerConfig or LoggingDeviceConfig is null, but...
                      logError("Connection Failed:  Could not obtain the DataStoreServerConfig and/or LoggingDeviceConfig from the device.  The Gateway will now shutdown.");
                      device.disconnect();
-                     System.exit(1); // TODO: fix this!
+                     System.exit(1);
                      }
                   }
                }

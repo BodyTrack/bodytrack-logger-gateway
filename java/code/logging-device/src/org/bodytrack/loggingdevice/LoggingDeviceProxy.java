@@ -102,7 +102,19 @@ class LoggingDeviceProxy implements LoggingDevice
                LOG.info("BodyTrack Logging Device handshake successful!");
 
                // now create and return the proxy
-               return new LoggingDeviceProxy(commandQueue, serialPortName);
+               try
+                  {
+                  return new LoggingDeviceProxy(commandQueue, serialPortName);
+                  }
+               catch (InitializationException e)
+                  {
+                  LOG.error("InitializationException while trying to create the LoggingDeviceProxy", e);
+                  CONSOLE_LOG.error("Failed to initialize logging device.");
+                  }
+               catch (Exception e)
+                  {
+                  LOG.error("Exception while trying to create the LoggingDeviceProxy", e);
+                  }
                }
             else
                {
@@ -118,6 +130,7 @@ class LoggingDeviceProxy implements LoggingDevice
          LOG.error("Exception while trying to create the LoggingDeviceProxy", e);
          }
 
+      CONSOLE_LOG.error("Connection failed.");
       return null;
       }
 
@@ -141,7 +154,7 @@ class LoggingDeviceProxy implements LoggingDevice
    private final DataStoreServerConfig dataStoreServerConfig;
    private final DataStoreConnectionConfig dataStoreConnectionConfig;
 
-   private LoggingDeviceProxy(final SerialDeviceCommandExecutionQueue commandQueue, final String serialPortName)
+   private LoggingDeviceProxy(final SerialDeviceCommandExecutionQueue commandQueue, final String serialPortName) throws InitializationException
       {
       this.commandQueue = commandQueue;
       this.serialPortName = serialPortName;
@@ -159,30 +172,43 @@ class LoggingDeviceProxy implements LoggingDevice
       stringReturnValueCommandExecutor = new SerialDeviceReturnValueCommandExecutor<String>(commandQueue, commandExecutionFailureHandler);
       final SerialDeviceNoReturnValueCommandExecutor noReturnValueCommandExecutor = new SerialDeviceNoReturnValueCommandExecutor(commandQueue, commandExecutionFailureHandler);
 
-      // before doing anything else, we need to tell the device the current time--keep retrying until successful
-      boolean wasSetTimeSuccessful;
-      int numAttemptsToSetTime = 0;
-      do
-         {
-         wasSetTimeSuccessful = noReturnValueCommandExecutor.execute(setCurrentTimeCommandStrategy);
-         numAttemptsToSetTime++;
-         if (!wasSetTimeSuccessful)
+      final Boolean timeSuccess =
+            new RetryingActionExecutor<Boolean>()
             {
-            final String message = "Failed to set the time on the device (" + numAttemptsToSetTime + " failed attempt(s))";
-            LOG.error(message);
-            CONSOLE_LOG.error(message);
-            try
+            @Override
+            @Nullable
+            protected Boolean executionWorkhorse(final int attemptNumber, final int maxNumberOfAttempts)
                {
-               //noinspection BusyWait
-               Thread.sleep(500);
+               final String msg = "Attempting to set the time on the device (attempt " + attemptNumber + " of " + maxNumberOfAttempts + ")...";
+               CONSOLE_LOG.info(msg);
+               if (LOG.isInfoEnabled())
+                  {
+                  LOG.info("LoggingDeviceProxy.executionWorkhorse(): " + msg);
+                  }
+
+               final boolean success = noReturnValueCommandExecutor.execute(setCurrentTimeCommandStrategy);
+               if (success)
+                  {
+                  final String message = "Time set successfully!";
+                  LOG.info(message);
+                  CONSOLE_LOG.info(message);
+                  }
+               else
+                  {
+                  final String message = "Failed to set the time on the device!";
+                  LOG.info(message);
+                  CONSOLE_LOG.info(message);
+                  }
+
+               return success;
                }
-            catch (InterruptedException e)
-               {
-               LOG.error("InterruptedException while sleeping", e);
-               }
-            }
+            }.execute();
+
+      // throw a connection exception if we can't set the time on the device
+      if (!Boolean.TRUE.equals(timeSuccess))
+         {
+         throw new InitializationException("Failed to set the time on the device.");
          }
-      while (!wasSetTimeSuccessful);
 
       // we cache all the config values since the chances of the user reconfiguring the device while the program is
       // running is low and isn't supported by the devices anyway
@@ -191,9 +217,9 @@ class LoggingDeviceProxy implements LoggingDevice
             {
             @Override
             @Nullable
-            protected LoggingDeviceConfig executionWorkhorse()
+            protected LoggingDeviceConfig executionWorkhorse(final int attemptNumber, final int maxNumberOfAttempts)
                {
-               final String msg = "Reading username and device nickname from device...";
+               final String msg = "Reading username and device nickname from device (attempt " + attemptNumber + " of " + maxNumberOfAttempts + ")...";
                CONSOLE_LOG.info(msg);
                if (LOG.isInfoEnabled())
                   {
@@ -217,6 +243,7 @@ class LoggingDeviceProxy implements LoggingDevice
          final String message = "Failed to read username and device nickname from device!";
          LOG.error(message);
          CONSOLE_LOG.error(message);
+         throw new InitializationException(message);
          }
       else
          {
@@ -230,9 +257,9 @@ class LoggingDeviceProxy implements LoggingDevice
             {
             @Override
             @Nullable
-            protected DataStoreServerConfig executionWorkhorse()
+            protected DataStoreServerConfig executionWorkhorse(final int attemptNumber, final int maxNumberOfAttempts)
                {
-               final String msg = "Reading server name and port from device...";
+               final String msg = "Reading server name and port from device (attempt " + attemptNumber + " of " + maxNumberOfAttempts + ")...";
                CONSOLE_LOG.info(msg);
                if (LOG.isInfoEnabled())
                   {
@@ -245,6 +272,7 @@ class LoggingDeviceProxy implements LoggingDevice
                   {
                   return new DataStoreServerConfigImpl(serverName, serverPort);
                   }
+
                LOG.error("LoggingDeviceProxy.executionWorkhorse(): failed to retrieve serverName [" + serverName + "] and/or serverPort [" + serverPort + "].  Returning null DataStoreServerConfig.");
                return null;
                }
@@ -255,6 +283,7 @@ class LoggingDeviceProxy implements LoggingDevice
          final String message = "Failed to read server name and port from device!";
          LOG.error(message);
          CONSOLE_LOG.error(message);
+         throw new InitializationException(message);
          }
       else
          {
@@ -267,9 +296,9 @@ class LoggingDeviceProxy implements LoggingDevice
             new RetryingActionExecutor<DataStoreConnectionConfig>()
             {
             @Override
-            protected DataStoreConnectionConfig executionWorkhorse()
+            protected DataStoreConnectionConfig executionWorkhorse(final int attemptNumber, final int maxNumberOfAttempts)
                {
-               final String msg = "Reading wifi config from device...";
+               final String msg = "Reading wifi config from device (attempt " + attemptNumber + " of " + maxNumberOfAttempts + ")...";
                CONSOLE_LOG.info(msg);
                if (LOG.isInfoEnabled())
                   {
@@ -520,7 +549,7 @@ class LoggingDeviceProxy implements LoggingDevice
             {
             try
                {
-               final ReturnType val = executionWorkhorse();
+               final ReturnType val = executionWorkhorse(retryCount + 1, MAX_RETRIES);
                if (val != null)
                   {
                   return val;
@@ -549,7 +578,7 @@ class LoggingDeviceProxy implements LoggingDevice
          }
 
       @Nullable
-      protected abstract ReturnType executionWorkhorse();
+      protected abstract ReturnType executionWorkhorse(final int attemptNumber, final int maxNumberOfAttempts);
       }
 
    private static class LoggingDeviceConfigImpl implements LoggingDeviceConfig
