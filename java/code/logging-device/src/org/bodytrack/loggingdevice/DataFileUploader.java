@@ -42,7 +42,37 @@ public final class DataFileUploader
    private static final Logger LOG = Logger.getLogger(DataFileUploader.class);
    private static final Logger CONSOLE_LOG = Logger.getLogger("ConsoleLog");
 
-   private static final int MAX_NUM_UPLOAD_THREADS = 4;
+   public static final String MAX_NUM_UPLOAD_THREADS_SYSTEM_PROPERTY = "org.bodytrack.loggingdevice.DataFileUploader.max-num-upload-threads";
+   private static final int DEFAULT_MAX_NUM_UPLOAD_THREADS = 1;
+   private static final int MAX_NUM_UPLOAD_THREADS;
+
+   static
+      {
+      final String maxNumUploadThreadsStr = System.getProperty(MAX_NUM_UPLOAD_THREADS_SYSTEM_PROPERTY);
+      if (maxNumUploadThreadsStr == null)
+         {
+         MAX_NUM_UPLOAD_THREADS = DEFAULT_MAX_NUM_UPLOAD_THREADS;
+         }
+      else
+         {
+         int maxNumUploadThreads;
+         try
+            {
+            maxNumUploadThreads = Integer.parseInt(maxNumUploadThreadsStr);
+            }
+         catch (NumberFormatException e)
+            {
+            LOG.error("NumberFormatException while trying to parse [" + maxNumUploadThreadsStr + "] as an int for the max number of upload threads.  Defaulting to " + DEFAULT_MAX_NUM_UPLOAD_THREADS, e);
+            maxNumUploadThreads = DEFAULT_MAX_NUM_UPLOAD_THREADS;
+            }
+
+         MAX_NUM_UPLOAD_THREADS = Math.max(1, maxNumUploadThreads);
+         }
+
+      final String message = "DataFileUploader: using up to [" + MAX_NUM_UPLOAD_THREADS + "] upload thread(s).";
+      LOG.info(message);
+      CONSOLE_LOG.info(message);
+      }
 
    /**
     * Determines the timeout in milliseconds until a connection is established. A timeout value of zero is interpreted
