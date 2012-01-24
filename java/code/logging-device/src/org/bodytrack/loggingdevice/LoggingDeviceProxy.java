@@ -380,7 +380,24 @@ class LoggingDeviceProxy implements LoggingDevice
    @Nullable
    public SortedSet<String> getAvailableFilenames()
       {
-      final String commaDelimitedFilenames = stringReturnValueCommandExecutor.execute(getAvilableFilenamesCommandStrategy);
+      String commaDelimitedFilenames = null;
+
+      try
+         {
+         // pause the pinger since downloading the list of filenames may take a long time
+         pinger.setPaused(true);
+         commaDelimitedFilenames = stringReturnValueCommandExecutor.execute(getAvilableFilenamesCommandStrategy);
+         }
+      catch (Exception e)
+         {
+         LOG.error("Exception while downloading the list of filenames", e);
+         }
+      finally
+         {
+         // make sure the pinger is unpaused
+         pinger.setPaused(false);
+         }
+
       if (commaDelimitedFilenames != null)
          {
          final SortedSet<String> availableFiles = new TreeSet<String>();
