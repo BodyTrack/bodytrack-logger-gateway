@@ -20,7 +20,7 @@ public class GetAvailableFilenamesCommandStrategy extends UnknownLengthStringRes
 
    public GetAvailableFilenamesCommandStrategy()
       {
-      super(10, TimeUnit.SECONDS);
+      super(10, TimeUnit.MINUTES);
       }
 
    @Override
