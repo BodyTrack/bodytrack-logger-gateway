@@ -461,7 +461,21 @@ class LoggingDeviceProxy implements LoggingDevice
       {
       if (filename != null && filename.length() > 0)
          {
-         return booleanReturnValueCommandExecutor.execute(new DeleteFileCommandStrategy(filename));
+         try
+            {
+            // pause the pinger since deletes may take a long time
+            pinger.setPaused(true);
+            return booleanReturnValueCommandExecutor.execute(new DeleteFileCommandStrategy(filename));
+            }
+         catch (Exception e)
+            {
+            LOG.error("Exception while deleting file [" + filename + "]", e);
+            }
+         finally
+            {
+            // make sure the pinger is unpaused
+            pinger.setPaused(false);
+            }
          }
       else
          {

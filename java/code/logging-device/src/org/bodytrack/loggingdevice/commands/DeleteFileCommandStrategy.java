@@ -1,5 +1,6 @@
 package org.bodytrack.loggingdevice.commands;
 
+import java.util.concurrent.TimeUnit;
 import edu.cmu.ri.createlab.serial.CreateLabSerialDeviceReturnValueCommandStrategy;
 import edu.cmu.ri.createlab.serial.SerialDeviceCommandResponse;
 import org.apache.log4j.Logger;
@@ -22,6 +23,8 @@ public class DeleteFileCommandStrategy extends CreateLabSerialDeviceReturnValueC
 
    public DeleteFileCommandStrategy(final String filename)
       {
+      super(10, TimeUnit.SECONDS);
+
       final String filenameUpperCase = filename.toUpperCase(); // base station uses all upper case for filenames
 
       final int lengthOfFilenameAndCRLF = filenameUpperCase.length() + 2;
